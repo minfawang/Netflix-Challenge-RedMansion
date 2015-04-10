@@ -13,7 +13,11 @@ class Estimator:
         
         :param x_list: a list contain (user, movie, date) pairs
         """
-        predict_list = []
+        g_list = []
         for (user, movie, date) in x_list:
-            predict_list.append(self.predict(user, movie, date)) 
-        return predict_list
+            g_list.append(self.predict(user, movie, date)) 
+        return g_list
+
+
+def MSE(y_list, g_list):
+    pass
