@@ -1,19 +1,16 @@
 import numpy
 
 class Estimator:
-    def __init__(self):
-        pass
     
-    def predict(self, user, movie):
+    def predict(self, user, movie, date):
         return 0
     
-    def predict_all(self, user_movie_list):
+    def predict_list(self, input_list):
         """Predict all the data points in the user_movie_list
         
-        :param user_movie_list: a list contain (user, movie) pairs
+        :param input_list: a list contain (user, movie, date) pairs
         """
         predict_list = []
-        for (user, movie) in user_movie_list:
-            predict_list.append(self.predict(user, movie)) 
+        for (user, movie, date) in input_list:
+            predict_list.append(self.predict(user, movie, date)) 
         return predict_list
-    
