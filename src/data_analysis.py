@@ -16,13 +16,13 @@ def main():
     qual_data = np.load(qual_path, mmap_mode='r')
     
     
-    for i in xrange(20):
-        bin_l = i * 250
-        bin_r = (i + 1) * 250
+    for i in xrange(1):
+        bin_l = i * 2000
+        bin_r = (i + 1) * 2000
         
         index = main_data[:, 1] == 3
-        index = main_data[index, 2] >= bin_l
-        index = main_data[index, 2] < bin_r
+#         index = main_data[index, 2] >= bin_l
+#         index = main_data[index, 2] < bin_r
         
         rates = main_data[index, 3]
         
