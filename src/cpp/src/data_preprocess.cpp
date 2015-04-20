@@ -1,5 +1,6 @@
 #define  _CRT_SECURE_NO_WARNINGS
 
+#include <ctime>
 #include <vector>
 #include <string>
 #include <sys/stat.h>
@@ -38,9 +39,6 @@ void test_data() {
 		system("pause");
 		exit(-1);
 	}
-
-
-	
 	
 	record *data = new record[size / sizeof(record)];
 	main.read((char *)data, size);
@@ -49,6 +47,22 @@ void test_data() {
 
 	delete data;
 }
+
+void test_data2() {
+	record_array qual;
+
+	time_t tic_time;
+	time_t toc_time;
+
+	tic_time = clock();
+	qual.load("main_data.data");
+	toc_time = clock();
+
+	cout << qual.size << endl;
+	cout << qual.data[qual.size - 1] << endl;
+	cout << toc_time - tic_time << "ms" << endl;
+}
+
 
 void preprocess() {
 	ifstream all_data, all_index;
@@ -96,14 +110,11 @@ void preprocess() {
 		if (cnt % 10000 == 0) {
 			cout << cnt << endl;
 		}
-	}
-
-
-	
+	}	
 }
 
 int main(int argc, char * argv[]) {
-	preprocess();
-	test_data();
+	//preprocess();
+	test_data2();
 	system("pause");
 }
