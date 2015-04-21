@@ -1,5 +1,6 @@
 #include "..\includes.hpp"
 #include <armadillo>
+#include <omp.h>
 
 
 #ifndef __MF_ESTIMATORS
@@ -136,18 +137,19 @@ public:
 
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size);
+
+#pragma omp parallel for num_threads(8)
 				for (int i = 0; i < train_data.size; i++) {
 					unsigned int index = shuffle_idx[i];
 					record rcd = train_data[index];
 					update(rcd);
 					if (i % block_size == 0) {
-						cout << '.';
-										
+						cout << '.';										
 					}
 				}
 				cout << '\t';
 				tmr.toc();
-				cout << endl;
+
 				// Regularization
 				//U *= shrink;
 				//V *= shrink;

@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <ctime>
+#include <vector>
 
 #ifndef __DATA_TYPES
 #define __DATA_TYPES
