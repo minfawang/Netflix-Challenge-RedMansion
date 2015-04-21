@@ -27,7 +27,7 @@ public:
 		lambda = 0.005;
 		learning_rate = 0.002;
 		K = 20;
-		n_iter = 40;
+		n_iter = 20;
 	}
 
 	virtual float predict(const record & rcd) const{
@@ -66,11 +66,13 @@ public:
 
 	virtual void fit(const record_array & train_data) {
 		try {
+			unsigned int block_size = train_data.size / 10;
 			double shrink = 1 - learning_rate * lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
 			timer tmr;
 
+			tmr.display_mode = 1;
 			learning_rate_per_record = learning_rate;
 
 			// Generate shuffle_idx
@@ -122,25 +124,30 @@ public:
 			A.fill(fill::randu);
 			B.fill(fill::randu);
 
-			tmr.tic();
+			
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
 				mat oU(U);
 				mat oV(V);
 				mat oA(A);
 				mat oB(B);
+
+				tmr.tic();
+				cout << "Iter\t" << i_iter << '\t';
+
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size);
 				for (int i = 0; i < train_data.size; i++) {
 					unsigned int index = shuffle_idx[i];
 					record rcd = train_data[index];
 					update(rcd);
-					if (i % 100000 == 0) {
-						cout << i << "   ";
-						tmr.toc();						
-						tmr.tic();
+					if (i % block_size == 0) {
+						cout << '.';
+										
 					}
 				}
-
+				cout << '\t';
+				tmr.toc();
+				cout << endl;
 				// Regularization
 				//U *= shrink;
 				//V *= shrink;

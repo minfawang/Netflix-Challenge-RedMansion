@@ -14,32 +14,38 @@ int main(int argc, char * argv[]) {
 	time_t toc_time;
 
 	tic_time = clock();
-	main.load("mini_main.data");
-	prob.load("mini_prob.data");
-	//qual.load("qual_data.data");
+	main.load("main_data.data");
+	prob.load("prob_data.data");
+	qual.load("qual_data.data");
 
 	cout << "Start to fit" << endl;
 	est.fit(main);
 
 	cout << "Start to predict" << endl;
 
+	cout << "Prob set" << endl;
+
 	vector<float> result = est.predict_list(prob);
 
 	cout << MSE(prob, result) << endl;
 
-	//cout << "Writting output file" << endl;
+	cout << "Qual set" << endl;
 
-	//ofstream output_file("output\\output.txt");
+	result = est.predict_list(qual);
 
-	//if (!output_file.is_open()) {
-	//	cerr << "Fail to open output file" << endl;
-	//	system("pause");
-	//	exit(-1);
-	//}
+	cout << "Writting output file" << endl;
 
-	//for (int i = 0; i < result.size(); i++) {
-	//	output_file << result[i] << endl;
-	//}
+	ofstream output_file("output\\output.txt");
+
+	if (!output_file.is_open()) {
+		cerr << "Fail to open output file" << endl;
+		system("pause");
+		exit(-1);
+	}
+
+	for (int i = 0; i < result.size(); i++) {
+		output_file << result[i] << endl;
+	}
 
 	toc_time = clock();
 	cout << result.size() << endl;

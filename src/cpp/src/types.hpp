@@ -12,11 +12,25 @@ class timer {
 private:
 	time_t last_time;
 public:
+	unsigned int display_mode;
+public:
+	timer() {
+		display_mode = 0;
+	}
 	void tic() {
 		last_time = clock();
 	}
 	void toc() {
-		cout << clock() - last_time << " ms" << endl;
+		switch (display_mode)
+		{
+		case 0:
+			cout << clock() - last_time << " ms" << endl;
+			break;
+		case 1:
+			cout << (clock() - last_time) / 1000 << " s" << endl;
+			break;
+		}
+		
 	}
 };
 
