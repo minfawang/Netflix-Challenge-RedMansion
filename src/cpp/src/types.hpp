@@ -49,7 +49,7 @@ public:
 		}
 	}
 
-	record & operator [] (unsigned int index) {
+	const record & operator [] (unsigned int index) const{
 		return data[index];
 	}
 
@@ -81,14 +81,33 @@ public:
 };
 
 class estimator_base {
+public:
+	virtual void fit(const record_array & train_data) = 0;
 
+	virtual float predict(const record & rcd) const = 0;
+
+	vector<float> predict_list(const record_array & rcd_array) {
+		vector<float> result;
+		result.resize(rcd_array.size);
+		for (int i = 0; i < rcd_array.size; i++) {
+			result[i] = predict(rcd_array[i]);
+		}
+		return result;
+	}
+};
+
+class constant_estimator : public estimator_base {
+public:
+	float r;
 	void fit(const record_array & train_data) {
-
+		for (int i = 0; i < train_data.size; i++) {
+			r += train_data[i].score;
+		}
+		r /= train_data.size;	
 	}
 
-	float predict(const record & rcd) {
-		// Predict a record
-		// The original scores will be ignored
+	float predict(const record & rcd) const {
+		return r;
 	}
 
 };

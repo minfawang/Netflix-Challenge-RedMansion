@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <sys/stat.h>
+#include <fstream>
 #include "includes.hpp"
 
 
@@ -63,6 +64,37 @@ void test_data2() {
 	cout << toc_time - tic_time << "ms" << endl;
 }
 
+void test_data3() {
+	record_array main, prob, qual;
+	constant_estimator est;
+
+	time_t tic_time;
+	time_t toc_time;
+
+	tic_time = clock();
+	main.load("main_data.data");
+	prob.load("prob_data.data");
+	qual.load("qual_data.data");
+	est.fit(main);
+
+	vector<float> result = est.predict_list(qual);
+
+	ofstream output_file("output\\output.txt");
+	if (!output_file.is_open()) {
+		cerr << "Fail to open output file" << endl;
+		system("pause");
+		exit(-1);
+	}
+
+	for (int i = 0; i < result.size(); i++) {
+		output_file << result[i] << endl;
+	}
+
+	toc_time = clock();
+	cout << result.size() << endl;
+	cout << toc_time - tic_time << "ms" << endl;
+}
+
 
 void preprocess() {
 	ifstream all_data, all_index;
@@ -115,6 +147,6 @@ void preprocess() {
 
 int main(int argc, char * argv[]) {
 	//preprocess();
-	test_data2();
+	test_data3();
 	system("pause");
 }
