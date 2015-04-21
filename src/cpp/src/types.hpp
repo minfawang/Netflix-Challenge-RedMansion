@@ -99,11 +99,24 @@ public:
 class constant_estimator : public estimator_base {
 public:
 	float r;
+	int cnt[6];
+
 	void fit(const record_array & train_data) {
-		for (int i = 0; i < train_data.size; i++) {
-			r += train_data[i].score;
+		long long sum = 0;
+
+		for (int i = 0; i < 6; i++) {
+			cnt[i] = 0;
 		}
-		r /= train_data.size;	
+
+		for (int i = 0; i < train_data.size; i++) {
+			cnt[int(train_data[i].score)]++;
+		}
+
+		sum = 0;
+		for (int i = 0; i < 6; i++) {
+			sum += cnt[i] * i;
+		}
+		r = 1.0 * sum / train_data.size;
 	}
 
 	float predict(const record & rcd) const {
