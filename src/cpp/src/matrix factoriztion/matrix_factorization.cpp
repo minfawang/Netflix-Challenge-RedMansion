@@ -8,6 +8,7 @@ using namespace arma;
 int main(int argc, char * argv[]) {
 	record_array main, prob, qual;
 	basic_mf est;
+
 	//constant_estimator est;
 
 	time_t tic_time;
@@ -17,6 +18,8 @@ int main(int argc, char * argv[]) {
 	main.load("main_data.data");
 	prob.load("prob_data.data");
 	qual.load("qual_data.data");
+
+	est.ptr_test_data = &prob;
 
 	cout << "Start to fit" << endl;
 	est.fit(main);

@@ -2,7 +2,6 @@
 #include <armadillo>
 #include <omp.h>
 
-
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
 
@@ -10,6 +9,8 @@ using namespace arma;
 
 class basic_mf : public estimator_base {
 public:
+	record_array * ptr_test_data;
+
 	mat U;
 	mat V;
 	mat A;
@@ -25,6 +26,7 @@ public:
 	unsigned int n_iter;
 
 	basic_mf() {
+		ptr_test_data = NULL;
 		lambda = 0.005;
 		learning_rate = 0.002;
 		K = 20;
@@ -67,7 +69,7 @@ public:
 
 	virtual void fit(const record_array & train_data) {
 		try {
-			unsigned int block_size = train_data.size / 100;
+			unsigned int block_size = train_data.size / 160;
 			double shrink = 1 - learning_rate * lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
@@ -154,6 +156,13 @@ public:
 						cout << '.';										
 					}
 				}
+				if (ptr_test_data != NULL) {
+					vector<float> result = this->predict_list(*ptr_test_data);
+					cout.precision(3);
+					cout << '\t' << MSE(*ptr_test_data, result);
+				}
+
+
 				cout << '\t';
 				tmr.toc();
 

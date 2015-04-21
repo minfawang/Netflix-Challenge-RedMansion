@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <ctime>
 #include <vector>
+#include <omp.h>
 
 #ifndef __DATA_TYPES
 #define __DATA_TYPES
@@ -108,7 +109,7 @@ public:
 	}
 };
 
-float MSE(record_array & test_data, vector<float> & prediction) {
+float MSE(const record_array & test_data, const vector<float> & prediction) {
 	double s = 0;
 	for (int i = 0; i < test_data.size; i++) {
 		s += (test_data[i].score - prediction[i]) * (test_data[i].score - prediction[i]);
@@ -125,6 +126,7 @@ public:
 	vector<float> predict_list(const record_array & rcd_array) {
 		vector<float> result;
 		result.resize(rcd_array.size);
+#pragma omp parallel for num_threads(8)
 		for (int i = 0; i < rcd_array.size; i++) {
 			result[i] = predict(rcd_array[i]);
 		}
