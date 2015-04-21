@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <sys/stat.h>
+#include <fstream>
 #include "includes.hpp"
 
 
@@ -64,14 +65,15 @@ void test_data2() {
 }
 
 void test_data3() {
-	record_array main, qual;
-	estimator_base est;
+	record_array main, prob, qual;
+	constant_estimator est;
 
 	time_t tic_time;
 	time_t toc_time;
 
 	tic_time = clock();
 	main.load("main_data.data");
+	prob.load("prob_data.data");
 	qual.load("qual_data.data");
 	est.fit(main);
 
