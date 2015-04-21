@@ -1,5 +1,6 @@
 #include "..\includes.hpp"
 #include <armadillo>
+#include <iomanip>
 #include <omp.h>
 
 #ifndef __MF_ESTIMATORS
@@ -13,8 +14,8 @@ public:
 
 	mat U;
 	mat V;
-	mat A;
-	mat B;
+	vec A;
+	vec B;
 	double mu;
 
 	double lambda;
@@ -27,15 +28,15 @@ public:
 
 	basic_mf() {
 		ptr_test_data = NULL;
-		lambda = 0.005;
+		lambda = 0.04;
 		learning_rate = 0.002;
-		K = 20;
-		n_iter = 20;
+		K = 5;
+		n_iter = 14;
 	}
 
 	virtual float predict(const record & rcd) const{
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1;
-		mat result = U.col(i).t() * V.col(j) + A.col(i) + B.col(j) + mu;
+		mat result = U.col(i).t() * V.col(j) + A(i) + B(j) + mu;
 		return result(0, 0);
 	}
 
@@ -48,11 +49,12 @@ public:
 
 	void update(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1;
-		mat pFpX;
+		double pFpX;
 		double r_pFpX;
+		mat UiVj = U.unsafe_col(i).t() * V.unsafe_col(j);
 
-		pFpX = 2.0 * (rcd.score - mu - (U.col(i).t() * V.col(j) + A.col(i) + B.col(j)));
-		r_pFpX = learning_rate_per_record * pFpX(0, 0);
+		pFpX = 2.0 * (rcd.score - mu - (UiVj(0, 0) + A(i) + B(j)));
+		r_pFpX = learning_rate_per_record * pFpX;
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
 		U.col(i) += r_pFpX * V.col(j);
@@ -61,10 +63,10 @@ public:
 		V.col(j) += r_pFpX * U.col(i);
 
 		// A(:,i) = A(:,i) - rate * gAi; gAi = - pFpX;
-		A.col(i) += r_pFpX;
+		A(i) += r_pFpX;
 
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
-		B.col(j) += r_pFpX;
+		B(j) += r_pFpX;
 	}
 
 	virtual void fit(const record_array & train_data) {
@@ -117,10 +119,10 @@ public:
 
 
 			// Reshape the matrix based on n_user and n_movie
-			U.reshape(K, n_user);
-			V.reshape(K, n_movie);
-			A.reshape(1, n_user);
-			B.reshape(1, n_movie);
+			U.set_size(K, n_user);
+			V.set_size(K, n_movie);
+			A.set_size(n_user);
+			B.set_size(n_movie);
 
 			U.fill(fill::randu);
 			V.fill(fill::randu);
@@ -131,8 +133,8 @@ public:
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
 				mat oU(U);
 				mat oV(V);
-				mat oA(A);
-				mat oB(B);
+				vec oA(A);
+				vec oB(B);
 
 				tmr.tic();
 				cout << "Iter\t" << i_iter << '\t';
@@ -158,7 +160,8 @@ public:
 				}
 				if (ptr_test_data != NULL) {
 					vector<float> result = this->predict_list(*ptr_test_data);
-					cout.precision(3);
+					cout << fixed;
+					cout << setprecision(5);
 					cout << '\t' << MSE(*ptr_test_data, result);
 				}
 
@@ -177,6 +180,7 @@ public:
 				B -= lambda * oB;
 
 				learning_rate *= 0.95;
+				lambda *= 0.95;
 			}
 			delete[]shuffle_idx;
 		}

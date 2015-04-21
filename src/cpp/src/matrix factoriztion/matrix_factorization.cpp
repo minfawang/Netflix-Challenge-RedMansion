@@ -15,9 +15,17 @@ int main(int argc, char * argv[]) {
 	time_t toc_time;
 
 	tic_time = clock();
+
+// #define _USE_MINI_SET
+
+#ifdef _USE_MINI_SET
+	main.load("mini_main.data");
+	prob.load("mini_prob.data");
+#else
 	main.load("main_data.data");
 	prob.load("prob_data.data");
 	qual.load("qual_data.data");
+#endif
 
 	est.ptr_test_data = &prob;
 
@@ -32,6 +40,7 @@ int main(int argc, char * argv[]) {
 
 	cout << MSE(prob, result) << endl;
 
+#ifndef _USE_MINI_SET
 	cout << "Qual set" << endl;
 
 	result = est.predict_list(qual);
@@ -49,6 +58,7 @@ int main(int argc, char * argv[]) {
 	for (int i = 0; i < result.size(); i++) {
 		output_file << result[i] << endl;
 	}
+#endif
 
 	toc_time = clock();
 	cout << result.size() << endl;
