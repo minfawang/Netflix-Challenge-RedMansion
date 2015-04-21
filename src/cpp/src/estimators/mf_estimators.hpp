@@ -67,7 +67,7 @@ public:
 
 	virtual void fit(const record_array & train_data) {
 		try {
-			unsigned int block_size = train_data.size / 10;
+			unsigned int block_size = train_data.size / 100;
 			double shrink = 1 - learning_rate * lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
@@ -79,8 +79,8 @@ public:
 			// Generate shuffle_idx
 			cout << train_data.size << endl;
 
-			shuffle_idx = new unsigned int[train_data.size];
-			for (int i = 0; i < train_data.size; i++) {
+			shuffle_idx = new unsigned int[train_data.size / 10];
+			for (int i = 0; i < train_data.size / 10; i++) {
 				shuffle_idx[i] = i;
 			}
 
@@ -136,13 +136,20 @@ public:
 				cout << "Iter\t" << i_iter << '\t';
 
 				// Reshuffle first
-				reshuffle(shuffle_idx, train_data.size);
+				reshuffle(shuffle_idx, train_data.size / 10);
 
 #pragma omp parallel for num_threads(8)
-				for (int i = 0; i < train_data.size; i++) {
-					unsigned int index = shuffle_idx[i];
-					record rcd = train_data[index];
-					update(rcd);
+				for (int i = 0; i < train_data.size / 10; i++) {
+					
+
+					for (int j = 0; j < 10; j++) {
+						unsigned int index = shuffle_idx[i] * 10 + j;
+						if (index < train_data.size) {
+							record rcd = train_data[index];
+							update(rcd);
+						}
+					}
+
 					if (i % block_size == 0) {
 						cout << '.';										
 					}
