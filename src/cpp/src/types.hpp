@@ -17,6 +17,15 @@ public:
 
 };
 
+ostream & operator << (ostream &output, record& rcd) {
+	output << rcd.user << " " << rcd.movie << " " << rcd.date << " " << rcd.score;
+	return output;
+}
+istream & operator >> (istream &input, record& rcd) {
+	input >> rcd.user >> rcd.movie >> rcd.date >> rcd.score;
+	return input;
+}
+
 class record_array {
 public:
 	record * data;
@@ -69,15 +78,18 @@ public:
 
 		data_from_file.read((char *) data, size * sizeof(record));
 	}
-
 };
 
-ostream & operator << (ostream &output, record& rcd) {
-	output << rcd.user << " " << rcd.movie << " " << rcd.date << " " << rcd.score;
-	return output;
-}
-istream & operator >> (istream &input, record& rcd) {
-	input >> rcd.user >> rcd.movie >> rcd.date >> rcd.score;
-	return input;
-}
+class estimator_base {
+
+	void fit(const record_array & train_data) {
+
+	}
+
+	float predict(const record & rcd) {
+		// Predict a record
+		// The original scores will be ignored
+	}
+
+};
 #endif
