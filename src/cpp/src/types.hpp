@@ -1,11 +1,24 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
+#include <ctime>
 
 #ifndef __DATA_TYPES
 #define __DATA_TYPES
 
 using namespace std;
+
+class timer {
+private:
+	time_t last_time;
+public:
+	void tic() {
+		last_time = clock();
+	}
+	void toc() {
+		cout << clock() - last_time << " ms" << endl;
+	}
+};
 
 class record {
 
@@ -44,7 +57,7 @@ public:
 
 	~record_array() {
 		if (data != NULL) {
-			delete data;
+			delete [] data;
 			data = NULL;
 		}
 	}
@@ -79,6 +92,14 @@ public:
 		data_from_file.read((char *) data, size * sizeof(record));
 	}
 };
+
+float MSE(record_array & test_data, vector<float> & prediction) {
+	double s = 0;
+	for (int i = 0; i < test_data.size; i++) {
+		s += (test_data[i].score - prediction[i]) * (test_data[i].score - prediction[i]);
+	}
+	return sqrt(s / test_data.size);
+}
 
 class estimator_base {
 public:
@@ -124,4 +145,6 @@ public:
 	}
 
 };
+
+
 #endif
