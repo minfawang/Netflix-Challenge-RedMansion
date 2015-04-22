@@ -29,7 +29,7 @@ public:
 			cout << clock() - last_time << " ms" << endl;
 			break;
 		case 1:
-			cout << (clock() - last_time) / 1000 << " s" << endl;
+			cout << (clock() - last_time) / 1000.0 << " s" << endl;
 			break;
 		}
 		

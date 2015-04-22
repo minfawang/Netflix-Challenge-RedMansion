@@ -49,24 +49,26 @@ public:
 
 	void update(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1;
-		double pFpX;
 		double r_pFpX;
-		mat UiVj = U.unsafe_col(i).t() * V.unsafe_col(j);
+		double *Ui = U.colptr(i);
+		double *Vj = V.colptr(j);
 
-		pFpX = 2.0 * (rcd.score - mu - (UiVj(0, 0) + A(i) + B(j)));
-		r_pFpX = learning_rate_per_record * pFpX;
+		double UiVj = fang_mul(Ui, Vj, K);
+
+		r_pFpX = learning_rate_per_record * 2.0 * (rcd.score - mu - (UiVj + A(i) + B(j)));
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
-		U.col(i) += r_pFpX * V.col(j);
+		fang_add_mul(Ui, Vj, r_pFpX, K);
 
 		// V(:,j) = V(:,j) - rate * gVj; gVj = - pFpX * U(:,i);
-		V.col(j) += r_pFpX * U.col(i);
+		fang_add_mul(Vj, Ui, r_pFpX, K);
 
 		// A(:,i) = A(:,i) - rate * gAi; gAi = - pFpX;
 		A(i) += r_pFpX;
 
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
 		B(j) += r_pFpX;
+
 	}
 
 	virtual void fit(const record_array & train_data) {
@@ -142,14 +144,14 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / 10);
 
-#pragma omp parallel for num_threads(8)
+ #pragma omp parallel for num_threads(8)
 				for (int i = 0; i < train_data.size / 10; i++) {
-					
+					unsigned int index_base = shuffle_idx[i] * 10;
 
 					for (int j = 0; j < 10; j++) {
-						unsigned int index = shuffle_idx[i] * 10 + j;
+						unsigned int index = index_base + j;
 						if (index < train_data.size) {
-							record rcd = train_data[index];
+							const record& rcd = train_data[index];
 							update(rcd);
 						}
 					}
