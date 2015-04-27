@@ -1,4 +1,4 @@
-#include "..\includes.hpp"
+#include "../includes.hpp"
 #include <armadillo>
 #include <iomanip>
 #include <omp.h>

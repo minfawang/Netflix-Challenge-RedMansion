@@ -1,6 +1,6 @@
 #include <armadillo>
-#include "..\estimators\mf_estimators.hpp"
-#include "..\includes.hpp"
+#include "../estimators/mf_estimators.hpp"
+#include "../includes.hpp"
 
 using namespace std;
 using namespace arma;
