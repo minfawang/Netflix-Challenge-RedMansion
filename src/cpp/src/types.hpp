@@ -109,7 +109,7 @@ public:
 	}
 };
 
-float MSE(const record_array & test_data, const vector<float> & prediction) {
+float RMSE(const record_array & test_data, const vector<float> & prediction) {
 	double s = 0;
 	for (int i = 0; i < test_data.size; i++) {
 		s += (test_data[i].score - prediction[i]) * (test_data[i].score - prediction[i]);
@@ -119,6 +119,8 @@ float MSE(const record_array & test_data, const vector<float> & prediction) {
 
 class estimator_base {
 public:
+	//virtual void save(const char * file_name) = 0;
+	//virtual void load(const char * file_name) = 0;
 	virtual void fit(const record_array & train_data) = 0;
 
 	virtual float predict(const record & rcd) const = 0;
