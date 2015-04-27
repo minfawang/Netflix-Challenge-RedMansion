@@ -16,9 +16,9 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-// #define _USE_MINI_SET
+#define _USE_MINI_SET 0
 
-#ifdef _USE_MINI_SET
+#if _USE_MINI_SET
 	main.load("mini_main.data");
 	prob.load("mini_prob.data");
 #else
@@ -38,9 +38,9 @@ int main(int argc, char * argv[]) {
 
 	vector<float> result = est.predict_list(prob);
 
-	cout << MSE(prob, result) << endl;
+	cout << RMSE(prob, result) << endl;
 
-#ifndef _USE_MINI_SET
+#if !_USE_MINI_SET
 	cout << "Qual set" << endl;
 
 	result = est.predict_list(qual);
