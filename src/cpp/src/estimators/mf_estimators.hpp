@@ -10,6 +10,8 @@ using namespace arma;
 
 class basic_mf : public estimator_base {
 public:
+	const char * id = "basic_mf";
+
 	record_array * ptr_test_data;
 
 	mat U;
@@ -21,6 +23,7 @@ public:
 	double lambda;
 	double learning_rate;
 	double learning_rate_per_record;
+	double learning_rate_mul;
 
 	unsigned int K;
 
@@ -28,10 +31,12 @@ public:
 
 	basic_mf() {
 		ptr_test_data = NULL;
-		lambda = 0.015;
-		learning_rate = 0.008;
+		lambda = 0.05;
+		learning_rate = 0.0005;
+		learning_rate_mul = 1;
 		K = 20;
-		n_iter = 50;
+		n_iter = 44;
+
 	}
 
 	virtual float predict(const record & rcd) const{
@@ -69,25 +74,27 @@ public:
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
 		B(j) += r_pFpX;
 
-		fang_positive(Ui, K);
-		fang_positive(Vj, K);
+		//fang_positive(Ui, K);
+		//fang_positive(Vj, K);
 
-		if (A(i) < 0) {
-			A(i) = 0;
-		}
+		//if (A(i) < 0) {
+		//	A(i) = 0;
+		//}
 
-		if (B(j) < 0) {
-			B(j) = 0;
-		}
+		//if (B(j) < 0) {
+		//	B(j) = 0;
+		//}
 
 	}
 
 	virtual void fit(const record_array & train_data) {
 		try {
-			unsigned int block_size = train_data.size / 160;
+			unsigned int batch_size = 1000;
+			unsigned int block_size = train_data.size / batch_size / 16;
 			double shrink = 1 - lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
+			unsigned int *shuffle_idx_batch;
 			timer tmr;
 
 			tmr.display_mode = 1;
@@ -96,9 +103,13 @@ public:
 			// Generate shuffle_idx
 			cout << train_data.size << endl;
 
-			shuffle_idx = new unsigned int[train_data.size / 100];
-			for (int i = 0; i < train_data.size / 100; i++) {
+			shuffle_idx = new unsigned int[train_data.size / batch_size];
+			for (int i = 0; i < train_data.size / batch_size; i++) {
 				shuffle_idx[i] = i;
+			}
+			shuffle_idx_batch = new unsigned int[batch_size];
+			for (int i = 0; i < batch_size; i++) {
+				shuffle_idx_batch[i] = i;
 			}
 
 			// Calculate n_user and n_movies
@@ -153,14 +164,17 @@ public:
 				cout << "Iter\t" << i_iter << '\t';
 
 				// Reshuffle first
-				reshuffle(shuffle_idx, train_data.size / 100);
+				reshuffle(shuffle_idx, train_data.size / batch_size);
 
  #pragma omp parallel for num_threads(8)
-				for (int i = 0; i < train_data.size / 100; i++) {
-					unsigned int index_base = shuffle_idx[i] * 10;
+				for (int i = 0; i < train_data.size / batch_size; i++) {
+					unsigned int index_base = shuffle_idx[i] * batch_size;
+					//reshuffle(shuffle_idx_batch, batch_size);
 
-					for (int j = 0; j < 100; j++) {
+					for (int j = 0; j < batch_size; j++) {
 						unsigned int index = index_base + j;
+
+						// shuffle_idx_batch[j] do harm to the result
 						if (index < train_data.size) {
 							const record& rcd = train_data[index];
 							update(rcd);
@@ -175,7 +189,7 @@ public:
 					vector<float> result = this->predict_list(*ptr_test_data);
 					cout << fixed;
 					cout << setprecision(5);
-					cout << '\t' << MSE(*ptr_test_data, result);
+					cout << '\t' << RMSE(*ptr_test_data, result);
 				}
 
 
@@ -187,19 +201,12 @@ public:
 
 				if (i_iter != n_iter - 1) {
 				// Regularization
-				U *= shrink;
-				V *= shrink;
-				A *= shrink;
-				B *= shrink;
-				//U -= lambda * oU;
-				//V -= lambda * oV;
-				//A -= lambda * oA;
-				//B -= lambda * oB;
-
-				
-				//lambda *= 0.95;
+					U *= shrink;
+					V *= shrink;
+					A *= shrink;
+					B *= shrink;
+					learning_rate_per_record *= learning_rate_mul;
 				}
-
 			}
 			delete[]shuffle_idx;
 		}
