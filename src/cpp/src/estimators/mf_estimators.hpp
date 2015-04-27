@@ -28,16 +28,16 @@ public:
 
 	basic_mf() {
 		ptr_test_data = NULL;
-		lambda = 0.04;
-		learning_rate = 0.002;
-		K = 5;
-		n_iter = 14;
+		lambda = 0.015;
+		learning_rate = 0.008;
+		K = 20;
+		n_iter = 50;
 	}
 
 	virtual float predict(const record & rcd) const{
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1;
-		mat result = U.col(i).t() * V.col(j) + A(i) + B(j) + mu;
-		return result(0, 0);
+		double result = as_scalar(U.col(i).t() * V.col(j)) + A(i) + B(j) + mu;
+		return result;
 	}
 
 	void reshuffle(unsigned int *shuffle_idx, unsigned int n) {
@@ -69,12 +69,23 @@ public:
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
 		B(j) += r_pFpX;
 
+		fang_positive(Ui, K);
+		fang_positive(Vj, K);
+
+		if (A(i) < 0) {
+			A(i) = 0;
+		}
+
+		if (B(j) < 0) {
+			B(j) = 0;
+		}
+
 	}
 
 	virtual void fit(const record_array & train_data) {
 		try {
 			unsigned int block_size = train_data.size / 160;
-			double shrink = 1 - learning_rate * lambda;
+			double shrink = 1 - lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
 			timer tmr;
@@ -85,8 +96,8 @@ public:
 			// Generate shuffle_idx
 			cout << train_data.size << endl;
 
-			shuffle_idx = new unsigned int[train_data.size / 10];
-			for (int i = 0; i < train_data.size / 10; i++) {
+			shuffle_idx = new unsigned int[train_data.size / 100];
+			for (int i = 0; i < train_data.size / 100; i++) {
 				shuffle_idx[i] = i;
 			}
 
@@ -133,22 +144,22 @@ public:
 
 			
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
-				mat oU(U);
-				mat oV(V);
-				vec oA(A);
-				vec oB(B);
+				//mat oU(U);
+				//mat oV(V);
+				//vec oA(A);
+				//vec oB(B);
 
 				tmr.tic();
 				cout << "Iter\t" << i_iter << '\t';
 
 				// Reshuffle first
-				reshuffle(shuffle_idx, train_data.size / 10);
+				reshuffle(shuffle_idx, train_data.size / 100);
 
  #pragma omp parallel for num_threads(8)
-				for (int i = 0; i < train_data.size / 10; i++) {
+				for (int i = 0; i < train_data.size / 100; i++) {
 					unsigned int index_base = shuffle_idx[i] * 10;
 
-					for (int j = 0; j < 10; j++) {
+					for (int j = 0; j < 100; j++) {
 						unsigned int index = index_base + j;
 						if (index < train_data.size) {
 							const record& rcd = train_data[index];
@@ -171,18 +182,24 @@ public:
 				cout << '\t';
 				tmr.toc();
 
-				// Regularization
-				//U *= shrink;
-				//V *= shrink;
-				//A *= shrink;
-				//B *= shrink;
-				U -= lambda * oU;
-				V -= lambda * oV;
-				A -= lambda * oA;
-				B -= lambda * oB;
+				cout << "\t\t";
+				cout << max(max(abs(U))) << '\t' << max(max(abs(V))) << '\t' << max(abs(A)) << '\t' << max(abs(B)) << endl;
 
-				learning_rate *= 0.95;
-				lambda *= 0.95;
+				if (i_iter != n_iter - 1) {
+				// Regularization
+				U *= shrink;
+				V *= shrink;
+				A *= shrink;
+				B *= shrink;
+				//U -= lambda * oU;
+				//V -= lambda * oV;
+				//A -= lambda * oA;
+				//B -= lambda * oB;
+
+				
+				//lambda *= 0.95;
+				}
+
 			}
 			delete[]shuffle_idx;
 		}

@@ -16,9 +16,9 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-// #define _USE_MINI_SET
+#define _USE_MINI_SET 1
 
-#ifdef _USE_MINI_SET
+#if _USE_MINI_SET
 	main.load("mini_main.data");
 	prob.load("mini_prob.data");
 #else
