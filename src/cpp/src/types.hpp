@@ -119,9 +119,10 @@ float RMSE(const record_array & test_data, const vector<float> & prediction) {
 
 class estimator_base {
 public:
-	//virtual void save(const char * file_name) = 0;
-	//virtual void load(const char * file_name) = 0;
-	virtual void fit(const record_array & train_data) = 0;
+	virtual bool save(const char * file_name) = 0;
+	virtual bool load(const char * file_name) = 0;
+
+	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) = 0;
 
 	virtual float predict(const record & rcd) const = 0;
 

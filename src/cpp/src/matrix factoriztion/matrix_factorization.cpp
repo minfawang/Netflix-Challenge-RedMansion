@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 	record_array main, prob, qual;
-	basic_mf est;
+	alpha_mf est;
 
 	//constant_estimator est;
 
@@ -17,6 +17,7 @@ int main(int argc, char * argv[]) {
 	tic_time = clock();
 
 #define _USE_MINI_SET 0
+#define _TEST_SAVE_AND_LOAD 1
 
 #if _USE_MINI_SET
 	main.load("mini_main.data");
@@ -30,7 +31,8 @@ int main(int argc, char * argv[]) {
 	est.ptr_test_data = &prob;
 
 	cout << "Start to fit" << endl;
-	est.fit(main);
+
+	est.fit(main, 50);
 
 	cout << "Start to predict" << endl;
 
@@ -38,7 +40,7 @@ int main(int argc, char * argv[]) {
 
 	vector<float> result = est.predict_list(prob);
 
-	cout << RMSE(prob, result) << endl;
+	cout << "RMSE: " << RMSE(prob, result) << endl;
 
 #if !_USE_MINI_SET
 	cout << "Qual set" << endl;
@@ -58,6 +60,23 @@ int main(int argc, char * argv[]) {
 	for (int i = 0; i < result.size(); i++) {
 		output_file << result[i] << endl;
 	}
+#endif
+
+#if _TEST_SAVE_AND_LOAD
+	cout << "Saving Model to test_model_files/test_model.data" << endl;
+	est.save("test_model_files/test_model.data");
+
+	alpha_mf est2;
+	cout << "Loading Model from test_model_files/test_model.data" << endl;
+	est2.load("test_model_files/test_model.data");
+
+	result = est2.predict_list(prob); 
+	cout << "RMSE: " << RMSE(prob, result) << endl;
+
+	est2.fit(main, 5, true);
+	result = est2.predict_list(prob);
+	cout << "RMSE: " << RMSE(prob, result) << endl;
+
 #endif
 
 	toc_time = clock();
