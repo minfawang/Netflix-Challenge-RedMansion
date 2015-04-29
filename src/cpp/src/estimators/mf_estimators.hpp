@@ -621,7 +621,7 @@ public:
 		return (date - 1) * D / 2243;
 	}
 
-	double abspwr(double t, double beta) const{
+	double abspwr(int t, float beta) const{
 		int sign = (t > 0) - (t < 0);
 		return sign * pow(abs(t), beta);
 	}
@@ -664,7 +664,7 @@ public:
 		}
 	}
 
-	float eval_function(unsigned int function_type, const float function_para[], int date) {
+	float eval_function(unsigned int function_type, const float function_para[], int t) {
 		float result;
 		switch (function_type)
 		{
@@ -672,13 +672,13 @@ public:
 			result = 1; 
 			break;
 		case 1: 
-			result = abspwr(date / 2243.0, function_para[2]); 
+			result = abspwr(t, function_para[2]); 
 			break;
 		case 2: 
-			result = cos_buffered(date / 2243.0 * 2 * PI * function_para[2]);
+			result = cos_buffered(t / 2243.0 * 2 * PI * function_para[2]);
 			break;
 		case 3: 
-			result = sin_buffered(date / 2243.0 * 2 * PI * function_para[2]); 
+			result = sin_buffered(t / 2243.0 * 2 * PI * function_para[2]); 
 			break;
 		default: result = 0;
 		}
@@ -686,7 +686,7 @@ public:
 #ifdef _TEST_NAN
 		if (isnan(result)) {
 			cout << function_para[0] << ' ' << function_para[1] << endl;
-			cout << date << endl;
+			cout << t << endl;
 		}
 #endif
 		return result;
@@ -748,7 +748,7 @@ public:
 		double *Ui = U.colptr(i);
 		double *Vj = V.colptr(j);
 
-		double UiVj = fang_mul(Ui, Vj, K);
+		double UiVj = accu(U.unsafe_col(i) % V.unsafe_col(j));
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
