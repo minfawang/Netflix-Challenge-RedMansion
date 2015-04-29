@@ -35,7 +35,7 @@ public:
 	basic_rbm() {
 		K = 5;
 		F = 10;
-		M = 17771; // TODO: change M to be total number of movies
+		M = 1778; // TODO: change M to be total number of movies
 		N = 458293;
 
 		W = randu<cube>(K, F, M) / 8.0;
@@ -80,33 +80,137 @@ public:
 			}
 		}
 
+		cout << "finish training!" << endl;
 
 		// predicting stage
 		unsigned int j = 0;
-		user_id = 0;
-		start = 0;
-		end = 0;
+		unsigned int train_start = 0;
+		unsigned int train_end = 0;
+		unsigned int test_start = 0;
+		unsigned int test_end = 0;
+		unsigned int train_user = ptr_train_data->data[0].user;
+		unsigned int test_user = ptr_test_data->data[0].user;
+
+
 		for (int i = 0; i < ptr_test_data->size; i++) {
-			record test_r = ptr_test_data->data[i];
-			while (user_id < test_r.user && j < ptr_train_data->size) {
-				user_id = ptr_train_data->data[i].user_id;
-				j++;
-			}
-			if (user_id == test_r.user) {
-				start = j;
-				while (user_id == test_r.user && j < ptr_train_data->size) {
+
+			vec Hu = zeros<vec>(F);
+			record r_test = ptr_test_data->data[i];
+
+			if ((test_user != r_test.user) || i == ptr_test_data->size -1) {
+				// make prediction of test_user for movies in the test set
+				test_end = i;
+
+				// find train_start and train_end
+				// record r_train = ptr_train_data->data[j];
+				record r_train;
+				r_train.user = 0;
+
+				while ((r_train.user <= test_user) && j < ptr_train_data->size) {
+					r_train = ptr_train_data->data[j];
+
+					if (r_train.user < test_user) {
+						train_start = j + 1;
+					}
 					j++;
 				}
-				end = j;
-				// TODO: make prediction with train_data[start:end] and test_r
-			}
-			else {
-				; // TODO: the user has no previous ratings. Return the average movie rating
-			}
 
-			start = j;
+				train_end = j;
 
+				if (ptr_train_data->data[j-1].user == r_test.user) {
+					// positive phase to compute Hu
+					for (int f = 0; f < F; f++) {
+						Hu(f) = BH(f);
+					}
+
+					for (int u = train_start; u < train_end; u++) {
+						record r_train = ptr_train_data->data[u];
+						for (int f = 0; f < F; f++) {
+							unsigned int k = int(r_train.score) - 1;
+							float w = W(k, f, r_train.movie);
+							Hu(f) += w;
+						}
+					}
+
+					// negative phase to predict score
+					for (int u = test_start; u < test_end; u++) {
+						record r_test = ptr_test_data->data[u];
+						vec rating_probs = zeros<vec>(K);
+						float predict_score = 0;
+
+						for (int k = 0; k < K; k++) {
+							rating_probs(k) = BV(k, r_test.movie);
+						}
+
+						for (int f = 0; f < F; f++) {
+							for (int k = 0; k < K; k++) {
+								float w = W(k, f, r_test.movie);
+								rating_probs(k) += w;
+							}
+						}
+
+						// normalize rating_probs
+						// QUESTION: Is it possible for prob to be less than 0?
+						float sum_k = 0;
+						for (int k = 0; k < K; k++) {
+							sum_k += rating_probs(k);
+						}
+						for (int k = 0; k < K; k++) {
+							rating_probs(k) /= sum_k;
+						}
+
+						// update predict score by taking average
+						for (int k = 0; k < K; k++) {
+							predict_score += (k+1) * rating_probs(k);
+						}
+
+						cout << predict_score << "  ";
+					}
+
+				} else {
+					// TODO: predict all movies to be 3.5
+					float predict_score;
+					for (int u = test_start; u < test_end; u++) {
+						predict_score = 3.5;
+					}
+				}
+
+				train_start = j;
+
+
+				test_start = i;
+				test_user = r_test.user;
+			}
 		}
+
+		cout << "finish predicting!" << endl;
+
+
+		// unsigned int j = 0;
+		// user_id = 0;
+		// start = 0;
+		// end = 0;
+		// for (int i = 0; i < ptr_test_data->size; i++) {
+		// 	record test_r = ptr_test_data->data[i];
+		// 	while (user_id < test_r.user && j < ptr_train_data->size) {
+		// 		user_id = ptr_train_data->data[i].user_id;
+		// 		j++;
+		// 	}
+		// 	if (user_id == test_r.user) {
+		// 		start = j;
+		// 		while (user_id == test_r.user && j < ptr_train_data->size) {
+		// 			j++;
+		// 		}
+		// 		end = j;
+		// 		// TODO: make prediction with train_data[start:end] and test_r
+		// 	}
+		// 	else {
+		// 		; // TODO: the user has no previous ratings. Return the average movie rating
+		// 	}
+
+		// 	start = j;
+
+		// }
 
 
 
@@ -256,7 +360,7 @@ int main () {
 
 	record_array test_data;
 	test_data.load(test_file_name.c_str());
-	rbm.ptr_test_data = &prob_data;
+	rbm.ptr_test_data = &test_data;
 	// rbm.predict_list();
 }
 
