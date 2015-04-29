@@ -4,7 +4,10 @@
 #include <omp.h>
 #include <unordered_map>
 #include <tuple>
+#include <mutex>
 const double PI = 3.141592653589793238463;
+
+#define _TEST_NAN
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -540,11 +543,14 @@ public:
 	// Row 0: function type
 	// Row 1: lambda
 	// Row ...£º function parameter
-	mat A_function_list;
-	mat B_function_list;
+	uvec A_function_type;
+	fmat A_function_list;
 
-	vec date_origin_user;
-	vec date_origin_movie;
+	uvec B_function_type;
+	fmat B_function_list;
+
+	uvec date_origin_user;
+	uvec date_origin_movie;
 
 	double mu;
 
@@ -557,21 +563,25 @@ public:
 	double learning_rate_per_record;
 	double learning_rate_mul;
 
-	unordered_map<pair<double, double>, double> pow_buffer;
-	unordered_map<double, double> cos_buffer;
-	unordered_map<double, double> sin_buffer;
+	//unordered_map<pair<double, double>, double> pow_buffer;
+	unordered_map<float, float> cos_buffer;
+	mutex cos_buffer_lock;
+	unordered_map<float, float> sin_buffer;
+	mutex sin_buffer_lock;
+
+	
 
 
 
 	beta_mf() {
 		K = 20;
 
-
 		initialized = false;
 		ptr_test_data = NULL;
 		lambda = 0.05;
 		learning_rate = 0.0005;
 		learning_rate_mul = 1;
+
 
 	}
 
@@ -616,45 +626,88 @@ public:
 		return sign * pow(abs(t), beta);
 	}
 
-	double cos_buffered(double x){
+	float cos_buffered(float x){
 		auto item = cos_buffer.find(x);
 		
 		if (item == cos_buffer.end()) {
-			double result = cos(x);
-			pair<double, double> pair_to_insert;
-			pair_to_insert.first = x;
-			pair_to_insert.second = result;
-			cos_buffer[x];
 
+			cos_buffer_lock.lock();
+
+			float result = cos(x);
+			pair<float, float> pr(x, result);
+			cos_buffer.insert(pr);
+
+			cos_buffer_lock.unlock();
+
+			return result;
+		} else{
+			return item->second;
 		}
 	}
 
-	double eval_function(const double function_para[], double date) {
-		unsigned int func = round(function_para[0]);
-		switch (func)
+	float sin_buffered(float x){
+		auto item = sin_buffer.find(x);
+
+		if (item == sin_buffer.end()) {
+			
+			sin_buffer_lock.lock();
+
+			float result = sin(x);
+			pair<float, float> pr(x, result);
+			sin_buffer.insert(pr);
+
+			sin_buffer_lock.unlock();
+
+			return result;
+		} else{
+			return item->second;
+		}
+	}
+
+	float eval_function(unsigned int function_type, const float function_para[], int date) {
+		float result;
+		switch (function_type)
 		{
-		case 0: return 1; break;
-		case 1: return abspwr(date / 2243.0, function_para[2]); break;
-		case 2: return cos_buffered(date / 2243.0 * 2 * PI * function_para[2]); break;
-		case 3: return sin_buffered(date / 2243.0 * 2 * PI * function_para[2]); break;
-		default: return 0;
+		case 0: 
+			result = 1; 
+			break;
+		case 1: 
+			result = abspwr(date / 2243.0, function_para[2]); 
+			break;
+		case 2: 
+			result = cos_buffered(date / 2243.0 * 2 * PI * function_para[2]);
+			break;
+		case 3: 
+			result = sin_buffered(date / 2243.0 * 2 * PI * function_para[2]); 
+			break;
+		default: result = 0;
 		}
+
+#ifdef _TEST_NAN
+		if (isnan(result)) {
+			cout << function_para[0] << ' ' << function_para[1] << endl;
+			cout << date << endl;
+		}
+#endif
+		return result;
+
 	}
 
-	vec eval_functions(const mat& function_list, unsigned int date, double date_origin) {
-		vec result;
+	fvec eval_functions(const uvec &function_type, const fmat&function_list, int date, int date_origin) {
+		fvec result;
 		result.set_size(function_list.n_cols);
 		for (unsigned int j = 0; j < function_list.n_cols; j++) {
-			result[j] = eval_function(function_list.colptr(j), date - date_origin);
+			result[j] = eval_function(function_type(j), function_list.colptr(j), date - date_origin);
 		}
 		return result;
 	}
 
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
-		vec A_func_val = eval_functions(A_function_list, d, date_origin_user[i]);
-		vec B_func_val = eval_functions(B_function_list, d, date_origin_movie[j]);
+		fvec A_func_val = eval_functions(A_function_type, A_function_list, d, date_origin_user[i]);
+		fvec B_func_val = eval_functions(B_function_type, B_function_list, d, date_origin_movie[j]);
 		double result = mu + as_scalar(U.col(i).t() * V.col(j));
+
 		result += dot(A_func_val, A.col(i));
 		result += dot(B_func_val, B.col(j));
 
@@ -664,16 +717,18 @@ public:
 		if (result < 1) {
 			result = 1;
 		}
-
-		//if (isnan(result)) {
-		//	cout << endl;
-		//	cout << d << endl;
-		//	cout << date_origin_user[i] << ' ' << date_origin_movie[j] << endl;
-		//	cout << A_func_val << A.col(i);
-		//	cout << B_func_val << B.col(j);
-		//	cout << mu << ' ' << as_scalar(U.col(i).t() * V.col(j));
-		//	system("pause");
-		//}
+#ifdef _TEST_NAN
+		if (isnan(result)) {
+			cout << endl;
+			cout << d << endl;
+			cout << date_origin_user[i] << ' ' << date_origin_movie[j] << endl;
+			cout << "A_func_val" << endl;
+			cout << A_func_val << A.col(i);
+			cout << "B_func_val" << endl;
+			cout << B_func_val << B.col(j);
+			cout << mu << ' ' << as_scalar(U.col(i).t() * V.col(j));
+		}
+#endif
 		return result;
 	}
 
@@ -697,12 +752,25 @@ public:
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
-		vec A_func_val = eval_functions(A_function_list, d, date_origin_user[i]);
-		vec B_func_val = eval_functions(B_function_list, d, date_origin_movie[j]);
+		fvec A_func_val = eval_functions(A_function_type, A_function_list, d, date_origin_user[i]);
+		fvec B_func_val = eval_functions(B_function_type, B_function_list, d, date_origin_movie[j]);
 
 		double result = mu + UiVj;
 		result += dot(A_func_val, A.col(i));
 		result += dot(B_func_val, B.col(j));
+
+#ifdef _TEST_NAN
+		if (isnan(result)) {
+			cout << mu << ' ' << UiVj << endl;
+			cout << "A" << endl;
+			cout << A_func_val;
+			cout << A.col(i);
+			cout << "B" << endl;
+			cout << B_func_val;
+			cout << B.col(j);
+			cout << endl;
+		}
+#endif
 
 		//learning rate * pFpX
 		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (rcd.score - result);
@@ -753,11 +821,11 @@ public:
 		mu = 1.0 * s / train_data.size;
 
 		// Calculate t_origin
-		date_origin_user = vec(n_user, fill::zeros);
-		date_origin_movie = vec(n_movie, fill::zeros);
+		date_origin_user = uvec(n_user, fill::zeros);
+		date_origin_movie = uvec(n_movie, fill::zeros);
 
-		vec user_count(n_user, fill::zeros);
-		vec movie_count(n_movie, fill::zeros);
+		uvec user_count(n_user, fill::zeros);
+		uvec movie_count(n_movie, fill::zeros);
 		for (unsigned int index = 0; index < train_data.size; index++) {
 			unsigned int i = train_data[index].user - 1;
 			unsigned int j = train_data[index].movie - 1;
@@ -768,21 +836,25 @@ public:
 			date_origin_movie[j] += d;
 		}
 
-		date_origin_user /= user_count;
-		date_origin_movie /= movie_count;
-
-		uvec idx;
-
 		// Handle _count == 0
-		idx = find_nonfinite(date_origin_user);
-		for (unsigned int v : idx) {
-			date_origin_user[v] = 2243 / 2.0;
+		for (unsigned int i = 0; i < user_count.n_elem; i++)
+		{
+			if (user_count[i] == 0) {
+				date_origin_user[i] = 2243 / 2;
+			} else {
+				date_origin_user[i] /= user_count[i];
+			}
+
+		}
+		for (unsigned int i = 0; i < movie_count.n_elem; i++)
+		{
+			if (movie_count[i] == 0) {
+				date_origin_movie[i] = 2243 / 2;
+			} else {
+				date_origin_movie[i] /= movie_count[i];
+			}
 		}
 
-		idx = find_nonfinite(date_origin_movie);
-		for (unsigned int v : idx) {
-			date_origin_movie[v] = 2243 / 2.0;
-		}
 
 
 		// Reshape the matrix based on n_user and n_movie
@@ -792,10 +864,9 @@ public:
 		// Writing the function list
 		unsigned int maximum_n_para = 3;
 
-		vector<vec> A_function_list_raw;
-		vector<vec> B_function_list_raw;
-
-		vec func(maximum_n_para);
+		vector<fvec> A_function_list_raw;
+		vector<fvec> B_function_list_raw;
+		fvec func(maximum_n_para);
 
 		// For A
 
@@ -805,7 +876,7 @@ public:
 		func[1] = 0.05; // Lambda
 		A_function_list_raw.push_back(func);
 
-		// Beta  = 0.4
+		//// Beta  = 0.4
 		func.zeros();
 		func[0] = 1;
 		func[1] = 0.05; // Lambda
@@ -813,7 +884,7 @@ public:
 		A_function_list_raw.push_back(func);
 
 		// cos and sin
-		for (unsigned int i = 1; i <= 16; i++) {
+		for (unsigned int i = 1; i <= 0; i++) {
 			// cos
 			func.zeros();
 			func[0] = 2;
@@ -828,8 +899,10 @@ public:
 			A_function_list_raw.push_back(func);
 		}
 		
+		A_function_type.resize(A_function_list_raw.size());
 		A_function_list.resize(maximum_n_para, A_function_list_raw.size());
 		for (unsigned int j = 0; j < A_function_list_raw.size(); j++) {
+			A_function_type(j) = A_function_list_raw[j][0];
 			A_function_list.col(j) = A_function_list_raw[j];
 		}
 
@@ -847,10 +920,28 @@ public:
 		func[0] = 1;
 		func[1] = 0.05; // Lambda
 		func[2] = 0.4;
-		B_function_list_raw.push_back(func);
+		//B_function_list_raw.push_back(func);
 
+		// cos and sin
+		for (unsigned int i = 1; i <= 0; i++) {
+			// cos
+			func.zeros();
+			func[0] = 2;
+			func[1] = 0.05; // Lambda
+			func[2] = i;
+			B_function_list_raw.push_back(func);
+
+			// sin
+			func[0] = 3;
+			func[1] = 0.05; // Lambda
+			func[2] = i;
+			B_function_list_raw.push_back(func);
+		}
+
+		B_function_type.resize(B_function_list_raw.size());
 		B_function_list.resize(maximum_n_para, B_function_list_raw.size());
 		for (unsigned int j = 0; j < B_function_list_raw.size(); j++) {
+			B_function_type(j) = B_function_list_raw[j][0];
 			B_function_list.col(j) = B_function_list_raw[j];
 		}
 		
@@ -916,7 +1007,7 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-#pragma omp parallel for num_threads(8)
+//#pragma omp parallel for num_threads(8)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
 					//reshuffle(shuffle_idx_batch, batch_size);
@@ -951,6 +1042,7 @@ public:
 					<< max(max(abs(V))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
+				cout << cos_buffer.size() << ' ' << sin_buffer.size() << endl;
 
 				if (i_iter != n_iter - 1) {
 					// Regularization
