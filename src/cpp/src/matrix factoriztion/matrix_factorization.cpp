@@ -6,8 +6,14 @@ using namespace std;
 using namespace arma;
 
 int main(int argc, char * argv[]) {
+
+	unsigned int n_iter = 60;
+	if (argc == 2) {
+		n_iter = atoi(argv[1]);
+	}
+
 	record_array main, prob, qual;
-	alpha_mf est;
+	beta_mf est;
 
 	//constant_estimator est;
 
@@ -17,7 +23,8 @@ int main(int argc, char * argv[]) {
 	tic_time = clock();
 
 #define _USE_MINI_SET 0
-#define _TEST_SAVE_AND_LOAD 1
+#define _TEST_SAVE_AND_LOAD 0
+
 
 #if _USE_MINI_SET
 	main.load("mini_main.data");
@@ -32,7 +39,7 @@ int main(int argc, char * argv[]) {
 
 	cout << "Start to fit" << endl;
 
-	est.fit(main, 50);
+	est.fit(main, n_iter);
 
 	cout << "Start to predict" << endl;
 

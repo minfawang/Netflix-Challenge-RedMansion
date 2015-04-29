@@ -124,7 +124,7 @@ public:
 
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) = 0;
 
-	virtual float predict(const record & rcd) const = 0;
+	virtual float predict(const record & rcd) = 0;
 
 	vector<float> predict_list(const record_array & rcd_array) {
 		vector<float> result;
