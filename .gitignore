@@ -4,3 +4,4 @@ project/
 *.mat
 test.cpp
 pre1.pptx
+.*

@@ -10,12 +10,6 @@
 using namespace arma;
 
 
-// class user_rating {
-// public:
-// 	unsigned 
-// };
-
-
 class basic_rbm : public estimator_base {
 public:
 
@@ -24,18 +18,25 @@ public:
 	// mat BH; // K * F
 	vec BH; // F
 
+	unsigned int N;
 	unsigned int M;
 	unsigned int K;
 	unsigned int F;
 	unsigned int CD_K;
-
 	float lrate; // learning rate
+
+
+	record_array *ptr_test_data;
+	record_array *ptr_train_data;
+
+
 
 
 	basic_rbm() {
 		K = 5;
 		F = 10;
-		M = 2000; // TODO: change M to be total number of movies
+		M = 17771; // TODO: change M to be total number of movies
+		N = 458293;
 
 		W = randu<cube>(K, F, M) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
@@ -62,6 +63,9 @@ public:
 		unsigned int user_id = train_data.data[0].user;
 		unsigned int start = 0;
 		unsigned int end = 0;
+
+
+		// training stage
 		for (int i = 0; i < train_data.size; i++) {
 			record r = train_data.data[i];
 			if ((user_id != r.user) || i == train_data.size-1) {
@@ -71,11 +75,49 @@ public:
 				user_id = r.user;
 				start = i;
 			}
+			if (i % 10000000 == 0) {
+				cout << "working on iteration " << i << " ..." << endl;
+			}
 		}
+
+
+		// predicting stage
+		unsigned int j = 0;
+		user_id = 0;
+		start = 0;
+		end = 0;
+		for (int i = 0; i < ptr_test_data->size; i++) {
+			record test_r = ptr_test_data->data[i];
+			while (user_id < test_r.user && j < ptr_train_data->size) {
+				user_id = ptr_train_data->data[i].user_id;
+				j++;
+			}
+			if (user_id == test_r.user) {
+				start = j;
+				while (user_id == test_r.user && j < ptr_train_data->size) {
+					j++;
+				}
+				end = j;
+				// TODO: make prediction with train_data[start:end] and test_r
+			}
+			else {
+				; // TODO: the user has no previous ratings. Return the average movie rating
+			}
+
+			start = j;
+
+		}
+
+
+
 	}
+
 	virtual float predict(const record & rcd) const{
+
 		return 0.0;
 	}
+
+
 
 
 	void train(const record *data, unsigned int user_id, unsigned int size, unsigned int n_iter = 1) {
@@ -198,14 +240,24 @@ public:
 
 
 int main () {
-	record_array main_data;
-	main_data.load("../../data/mini_main.data");
+	string train_file_name = "../../data/mini_main.data";
+	string test_file_name = "../../data/mini_prob.data";
+	
+	record_array train_data;
+	train_data.load(train_file_name.c_str());
+	cout << "finish loading " << train_file_name << endl;
+
 
 	basic_rbm rbm;
 
-	rbm.fit(main_data);
+	rbm.ptr_train_data = &train_data;
+	rbm.fit(train_data);
 
 
+	record_array test_data;
+	test_data.load(test_file_name.c_str());
+	rbm.ptr_test_data = &prob_data;
+	// rbm.predict_list();
 }
 
 
