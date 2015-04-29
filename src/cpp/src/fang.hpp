@@ -17,6 +17,13 @@ void fang_add_mul(double * colptr_a, double * colptr_b, double k, unsigned int n
 	}
 }
 
+void fang_add_mul(double * colptr_a, float * colptr_b, double k, unsigned int n) {
+	//colptr_a += colptr_b * k
+	for (unsigned int i = 0; i < n; i++) {
+		colptr_a[i] += colptr_b[i] * k;
+	}
+}
+
 void fang_positive(double * colptr_a, unsigned int n) {
 	//colptr_a += colptr_b * k
 	for (unsigned int i = 0; i < n; i++) {
