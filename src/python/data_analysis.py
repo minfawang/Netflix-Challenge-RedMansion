@@ -16,22 +16,7 @@ def main():
     qual_data = np.load(qual_path, mmap_mode='r')
     
     
-#     for i in xrange(1):
-#         bin_l = i * 2000
-#         bin_r = (i + 1) * 2000
-#         
-#         index = main_data[:, 1] == 3
-# #         index = main_data[index, 2] >= bin_l
-# #         index = main_data[index, 2] < bin_r
-#         
-#         rates = main_data[index, 3]
-#         
-#         plt.figure() 
-#         if len(rates) > 0:   
-#                     
-#             plt.hist(rates, [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5], rwidth=0.8)
-#     plt.show()
-    print qual_data[-1]
+    
     
     
 if __name__ == '__main__':
