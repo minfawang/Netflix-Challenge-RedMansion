@@ -5,9 +5,12 @@
 #include <unordered_map>
 #include <tuple>
 #include <mutex>
+
+const int MAX_DATE = 2243;
 const double PI = 3.141592653589793238463;
 
 #define _TEST_NAN
+
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -246,7 +249,6 @@ public:
 	}
 
 };
-
 
 class alpha_mf : public estimator_base {
 public:
@@ -519,6 +521,50 @@ public:
 
 };
 
+class function_table_generator {
+private:
+	double abspwr(int t, float beta) const{
+		int sign = (t > 0) - (t < 0);
+		return sign * pow(abs(1.0 * t / MAX_DATE), beta);
+	}
+	double sinw(int t, float w) const {
+		return sin(1.0 * t / MAX_DATE * PI * w);
+	}
+	double cosw(int t, float w) const {
+		return cos(1.0 * t / MAX_DATE * PI * w);
+	}
+public:
+	rowvec const_table() const {
+		rowvec result(2 * MAX_DATE + 1);
+		result.fill(fill::ones);
+		return result;
+	}
+
+	rowvec abspwr_table(float beta) const {
+		rowvec result(2 * MAX_DATE + 1);
+		for (int i = -MAX_DATE; i <= MAX_DATE; i++) {
+			result[i + MAX_DATE] = abspwr(i, beta);
+		}
+		return result;
+	}
+
+	rowvec sinw_table(float w) const {
+		rowvec result(2 * MAX_DATE + 1);
+		for (int i = -MAX_DATE; i <= MAX_DATE; i++) {
+			result[i + MAX_DATE] = sinw(i, w);
+		}
+		return result;
+	}
+
+	rowvec cosw_table(float w) const {
+		rowvec result(2 * MAX_DATE + 1);
+		for (int i = -MAX_DATE; i <= MAX_DATE; i++) {
+			result[i + MAX_DATE] = cosw(i, w);
+		}
+		return result;
+	}
+};
+
 class beta_mf : public estimator_base {
 public:
 	const int model_id = 10002;
@@ -530,24 +576,19 @@ public:
 	mat U;
 	mat V;
 
-	mat A;
-	mat B;
-
 	// (F_i, n_user)
-	mat A_function_para;
-
+	mat A;
 	// (F_j, n_movie)
-	mat B_function_para;
+	mat B;
+	
+	vec A_lambda;	
+	vec B_lambda;
 
-	// For each column:
-	// Row 0: function type
-	// Row 1: lambda
-	// Row ...£º function parameter
-	uvec A_function_type;
-	fmat A_function_list;
+	// (F_i, t + MaxDate)
+	mat A_function_table;
 
-	uvec B_function_type;
-	fmat B_function_list;
+	// (F_j, t + MaxDate)
+	mat B_function_table;
 
 	uvec date_origin_user;
 	uvec date_origin_movie;
@@ -581,8 +622,6 @@ public:
 		lambda = 0.05;
 		learning_rate = 0.0005;
 		learning_rate_mul = 1;
-
-
 	}
 
 	virtual bool save(const char * file_name) {
@@ -616,96 +655,18 @@ public:
 		return input_file.good();
 	}
 
-
-	unsigned int get_timebin(const unsigned int date, const unsigned int D) const{
-		return (date - 1) * D / 2243;
+	float eval_function(unsigned int function_num, const mat &function_table, int t) const{
+		return function_table[function_num, t + MAX_DATE];
 	}
 
-	double abspwr(int t, float beta) const{
-		int sign = (t > 0) - (t < 0);
-		return sign * pow(abs(t), beta);
-	}
-
-	float cos_buffered(float x){
-		auto item = cos_buffer.find(x);
-		
-		if (item == cos_buffer.end()) {
-
-			cos_buffer_lock.lock();
-
-			float result = cos(x);
-			pair<float, float> pr(x, result);
-			cos_buffer.insert(pr);
-
-			cos_buffer_lock.unlock();
-
-			return result;
-		} else{
-			return item->second;
-		}
-	}
-
-	float sin_buffered(float x){
-		auto item = sin_buffer.find(x);
-
-		if (item == sin_buffer.end()) {
-			
-			sin_buffer_lock.lock();
-
-			float result = sin(x);
-			pair<float, float> pr(x, result);
-			sin_buffer.insert(pr);
-
-			sin_buffer_lock.unlock();
-
-			return result;
-		} else{
-			return item->second;
-		}
-	}
-
-	float eval_function(unsigned int function_type, const float function_para[], int t) {
-		float result;
-		switch (function_type)
-		{
-		case 0: 
-			result = 1; 
-			break;
-		case 1: 
-			result = abspwr(t, function_para[2]); 
-			break;
-		case 2: 
-			result = cos_buffered(t / 2243.0 * 2 * PI * function_para[2]);
-			break;
-		case 3: 
-			result = sin_buffered(t / 2243.0 * 2 * PI * function_para[2]); 
-			break;
-		default: result = 0;
-		}
-
-#ifdef _TEST_NAN
-		if (isnan(result)) {
-			cout << function_para[0] << ' ' << function_para[1] << endl;
-			cout << t << endl;
-		}
-#endif
-		return result;
-
-	}
-
-	fvec eval_functions(const uvec &function_type, const fmat&function_list, int date, int date_origin) {
-		fvec result;
-		result.set_size(function_list.n_cols);
-		for (unsigned int j = 0; j < function_list.n_cols; j++) {
-			result[j] = eval_function(function_type(j), function_list.colptr(j), date - date_origin);
-		}
-		return result;
+	vec eval_functions(const mat &function_table, int t) {
+		return function_table.unsafe_col(t + MAX_DATE);
 	}
 
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
-		fvec A_func_val = eval_functions(A_function_type, A_function_list, d, date_origin_user[i]);
-		fvec B_func_val = eval_functions(B_function_type, B_function_list, d, date_origin_movie[j]);
+		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
+		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 		double result = mu + as_scalar(U.col(i).t() * V.col(j));
 
 		result += dot(A_func_val, A.col(i));
@@ -748,12 +709,12 @@ public:
 		double *Ui = U.colptr(i);
 		double *Vj = V.colptr(j);
 
-		double UiVj = accu(U.unsafe_col(i) % V.unsafe_col(j));
+		double UiVj = dot(U.unsafe_col(i), V.unsafe_col(j));
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
-		fvec A_func_val = eval_functions(A_function_type, A_function_list, d, date_origin_user[i]);
-		fvec B_func_val = eval_functions(B_function_type, B_function_list, d, date_origin_movie[j]);
+		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
+		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 
 		double result = mu + UiVj;
 		result += dot(A_func_val, A.col(i));
@@ -861,94 +822,28 @@ public:
 		U.set_size(K, n_user);
 		V.set_size(K, n_movie);
 
-		// Writing the function list
-		unsigned int maximum_n_para = 3;
+		function_table_generator ftg;
+		vector<double> A_lambda_raw;
+		vector<double> B_lambda_raw;
 
-		vector<fvec> A_function_list_raw;
-		vector<fvec> B_function_list_raw;
-		fvec func(maximum_n_para);
+		// A table
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.const_table());
+		A_lambda_raw.push_back(0.05);
 
-		// For A
-
-		// Constant
-		func.zeros();
-		func[0] = 0;
-		func[1] = 0.05; // Lambda
-		A_function_list_raw.push_back(func);
-
-		//// Beta  = 0.4
-		func.zeros();
-		func[0] = 1;
-		func[1] = 0.05; // Lambda
-		func[2] = 0.4;
-		A_function_list_raw.push_back(func);
-
-		// cos and sin
-		for (unsigned int i = 1; i <= 0; i++) {
-			// cos
-			func.zeros();
-			func[0] = 2;
-			func[1] = 0.05; // Lambda
-			func[2] = i;
-			A_function_list_raw.push_back(func);
-
-			// sin
-			func[0] = 3;
-			func[1] = 0.05; // Lambda
-			func[2] = i;
-			A_function_list_raw.push_back(func);
-		}
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
+		A_lambda_raw.push_back(0.05);
 		
-		A_function_type.resize(A_function_list_raw.size());
-		A_function_list.resize(maximum_n_para, A_function_list_raw.size());
-		for (unsigned int j = 0; j < A_function_list_raw.size(); j++) {
-			A_function_type(j) = A_function_list_raw[j][0];
-			A_function_list.col(j) = A_function_list_raw[j];
-		}
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.const_table());
+		B_lambda_raw.push_back(0.05);
 
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
+		B_lambda_raw.push_back(0.05);
 
-		// For B
+		A.resize(A_function_table.n_rows, n_user);
+		B.resize(B_function_table.n_rows, n_movie);
 
-		// Constant
-		func.zeros();
-		func[0] = 0;
-		func[1] = 0.05; // Lambda
-		B_function_list_raw.push_back(func);
-
-		// Beta  = 0.4
-		func.zeros();
-		func[0] = 1;
-		func[1] = 0.05; // Lambda
-		func[2] = 0.4;
-		//B_function_list_raw.push_back(func);
-
-		// cos and sin
-		for (unsigned int i = 1; i <= 0; i++) {
-			// cos
-			func.zeros();
-			func[0] = 2;
-			func[1] = 0.05; // Lambda
-			func[2] = i;
-			B_function_list_raw.push_back(func);
-
-			// sin
-			func[0] = 3;
-			func[1] = 0.05; // Lambda
-			func[2] = i;
-			B_function_list_raw.push_back(func);
-		}
-
-		B_function_type.resize(B_function_list_raw.size());
-		B_function_list.resize(maximum_n_para, B_function_list_raw.size());
-		for (unsigned int j = 0; j < B_function_list_raw.size(); j++) {
-			B_function_type(j) = B_function_list_raw[j][0];
-			B_function_list.col(j) = B_function_list_raw[j];
-		}
-		
-
-		A.resize(A_function_list_raw.size(), n_user);
-		B.resize(B_function_list_raw.size(), n_movie);
-
+		A_lambda = vec(A_lambda_raw);
+		B_lambda = vec(B_lambda_raw);
 		
 		U.fill(fill::randu);
 		V.fill(fill::randu);
@@ -992,11 +887,11 @@ public:
 			vec B_shrink(B.n_rows);
 
 			for (unsigned int i = 0; i < A.n_rows; i++) {
-				A_shrink[i] = 1 - A_function_list.col(i)[1];
+				A_shrink[i] = 1 - A_lambda[i];
 			}
 
 			for (unsigned int i = 0; i < B.n_rows; i++) {
-				B_shrink[i] = 1 - B_function_list.col(i)[1];
+				B_shrink[i] = 1 - B_lambda[i];
 			}
 
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
@@ -1007,7 +902,7 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-//#pragma omp parallel for num_threads(8)
+#pragma omp parallel for num_threads(8)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
 					//reshuffle(shuffle_idx_batch, batch_size);
