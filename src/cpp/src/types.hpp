@@ -126,7 +126,7 @@ public:
 
 	virtual float predict(const record & rcd) = 0;
 
-	vector<float> predict_list(const record_array & rcd_array) {
+	virtual vector<float> predict_list(const record_array & rcd_array) {
 		vector<float> result;
 		result.resize(rcd_array.size);
 #pragma omp parallel for num_threads(8)
