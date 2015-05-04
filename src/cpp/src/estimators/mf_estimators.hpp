@@ -573,7 +573,10 @@ public:
 
 	record_array * ptr_test_data;
 
-	mat U;
+	mat U0;
+	mat U1;
+	rowvec U1_function_table;
+
 	mat V;
 
 	// (F_i, n_user)
@@ -628,7 +631,7 @@ public:
 		ofstream output_file(file_name, ios::binary | ios::out);
 		output_file.write((const char *)&model_id, sizeof(int));
 		output_file.write((const char *)&K, sizeof(int));
-		U.save(output_file);
+		U0.save(output_file);
 		V.save(output_file);
 		A.save(output_file);
 		B.save(output_file);
@@ -646,7 +649,7 @@ public:
 			cout << model_id << ":" << id << endl;
 			return false;
 		}
-		U.load(input_file);
+		U0.load(input_file);
 		V.load(input_file);
 		A.load(input_file);
 		B.load(input_file);
@@ -655,8 +658,8 @@ public:
 		return input_file.good();
 	}
 
-	float eval_function(unsigned int function_num, const mat &function_table, int t) const{
-		return function_table[function_num, t + MAX_DATE];
+	double eval_function(const mat &function_table, int t) const{
+		return function_table[t + MAX_DATE];
 	}
 
 	vec eval_functions(const mat &function_table, int t) {
@@ -667,7 +670,10 @@ public:
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
 		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
 		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
-		double result = mu + as_scalar(U.col(i).t() * V.col(j));
+
+		vec U_col = U0.col(i) + U1.col(i) * eval_function(U1_function_table, d - date_origin_user[i]);
+
+		double result = mu + dot(U_col, V.unsafe_col(j));
 
 		result += dot(A_func_val, A.col(i));
 		result += dot(B_func_val, B.col(j));
@@ -687,7 +693,7 @@ public:
 			cout << A_func_val << A.col(i);
 			cout << "B_func_val" << endl;
 			cout << B_func_val << B.col(j);
-			cout << mu << ' ' << as_scalar(U.col(i).t() * V.col(j));
+			cout << mu << ' ' << as_scalar(U0.col(i).t() * V.col(j));
 		}
 #endif
 		return result;
@@ -706,10 +712,14 @@ public:
 
 		double r_pFpX;
 
-		double *Ui = U.colptr(i);
-		double *Vj = V.colptr(j);
+		double *U0i = U0.colptr(i);
+		double *U1i = U1.colptr(i);
+		double u = eval_function(U1_function_table, d - date_origin_user[i]);
 
-		double UiVj = dot(U.unsafe_col(i), V.unsafe_col(j));
+		vec U_col = U0.unsafe_col(i) + U1.unsafe_col(i) * u;
+
+		double *Vj = V.colptr(j);
+		double UiVj = dot(U_col, V.unsafe_col(j));
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
@@ -737,10 +747,11 @@ public:
 		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (rcd.score - result);
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
-		fang_add_mul(Ui, Vj, r_pFpX, K);
+		fang_add_mul(U0i, Vj, r_pFpX, K);
+		fang_add_mul(U1i, Vj, r_pFpX * u, K);
 
 		// V(:,j) = V(:,j) - rate * gVj; gVj = - pFpX * U(:,i);
-		fang_add_mul(Vj, Ui, r_pFpX, K);
+		fang_add_mul(Vj, U_col.memptr(), r_pFpX, K);
 
 		// A(:,i) = A(:,i) - rate * gAi; gAi = - pFpX;
 		fang_add_mul(A.colptr(i), A_func_val.memptr(), r_pFpX, A_func_val.n_rows);
@@ -819,12 +830,16 @@ public:
 
 
 		// Reshape the matrix based on n_user and n_movie
-		U.set_size(K, n_user);
+		U0.set_size(K, n_user);
+		U1.set_size(K, n_user);
 		V.set_size(K, n_movie);
 
 		function_table_generator ftg;
 		vector<double> A_lambda_raw;
 		vector<double> B_lambda_raw;
+
+		// U table
+		U1_function_table = ftg.abspwr_table(0.4);
 
 		// A table
 
@@ -837,13 +852,13 @@ public:
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1));
 		A_lambda_raw.push_back(0.05);
 
-		for (int i = 1; i <= 16; i+=3) {
-			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
-			A_lambda_raw.push_back(0.05);
+		//for (int i = 1; i <= 16; i+=5) {
+		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
+		//	A_lambda_raw.push_back(0.05);
 
-			A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
-			A_lambda_raw.push_back(0.05);
-		}
+		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
+		//	A_lambda_raw.push_back(0.05);
+		//}
 
 		// B table
 		
@@ -856,13 +871,13 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1));
 		B_lambda_raw.push_back(0.05);
 
-		for (int i = 1; i <= 16; i+=3) {
-			B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
-			B_lambda_raw.push_back(0.05);
+		//for (int i = 1; i <= 16; i+=3) {
+		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
+		//	B_lambda_raw.push_back(0.05);
 
-			B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
-			B_lambda_raw.push_back(0.05);
-		}
+		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
+		//	B_lambda_raw.push_back(0.05);
+		//}
 
 		A.resize(A_function_table.n_rows, n_user);
 		B.resize(B_function_table.n_rows, n_movie);
@@ -870,7 +885,8 @@ public:
 		A_lambda = vec(A_lambda_raw);
 		B_lambda = vec(B_lambda_raw);
 		
-		U.fill(fill::randu);
+		U0.fill(fill::randu);
+		U1.fill(fill::zeros);
 		V.fill(fill::randu);
 		A.fill(fill::randu);
 		B.fill(fill::randu);
@@ -958,7 +974,7 @@ public:
 				tmr.toc();
 
 				cout << "\t\t";
-				cout << max(max(abs(U))) << ' '
+				cout << max(max(abs(U0))) << ' '
 					<< max(max(abs(V))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
@@ -966,7 +982,8 @@ public:
 
 				if (i_iter != n_iter - 1) {
 					// Regularization
-					U *= shrink;
+					U0 *= shrink;
+					U1 *= shrink;
 					V *= shrink;
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
