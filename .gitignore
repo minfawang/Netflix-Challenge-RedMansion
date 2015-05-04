@@ -2,6 +2,6 @@ um/
 mu/
 project/
 *.mat
-test.cpp
+test*
 pre1.pptx
 .*

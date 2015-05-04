@@ -35,8 +35,8 @@ public:
 	basic_rbm() {
 		K = 5;
 		F = 10;
-		M = 1778; // TODO: change M to be total number of movies
-		N = 458293;
+		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
+		N = 458293 / 10;
 
 		W = randu<cube>(K, F, M) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
@@ -44,8 +44,8 @@ public:
 		BH = randu<vec>(F) / 8.0;
 
 
-		CD_K = 1;
-		lrate = 0.0001;
+		CD_K = 5;
+		lrate = 0.00001;
 
 
 	}
@@ -60,28 +60,44 @@ public:
 
 
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) {
-		unsigned int user_id = train_data.data[0].user;
-		unsigned int start = 0;
-		unsigned int end = 0;
 
 
 		// training stage
-		for (int i = 0; i < train_data.size; i++) {
-			record r = train_data.data[i];
-			if ((user_id != r.user) || i == train_data.size-1) {
-				end = i;
-				train((train_data.data+start), user_id, end - start, n_iter);
+		for (int iter_num = 0; iter_num < n_iter; iter_num++) {
+			
+			cout << "working on iteration " << iter_num << "..." << endl;
 
-				user_id = r.user;
-				start = i;
-			}
-			if (i % 10000000 == 0) {
-				cout << "working on iteration " << i << " ..." << endl;
+			unsigned int user_id = train_data.data[0].user;
+			unsigned int start = 0;
+			unsigned int end = 0;
+
+			for (int i = 0; i < train_data.size; i++) {
+				record r = train_data.data[i];
+				if ((user_id != r.user) || i == train_data.size-1) {
+					end = (i == train_data.size-1) ? (i + 1) : i;
+					train((train_data.data+start), user_id, end - start, n_iter);
+
+					user_id = r.user;
+					start = i;
+				}
+				// if (i % 1000000 == 0) {
+				// 	cout << "working on data " << i << " ..." << endl;
+				// }
 			}
 		}
 
-		cout << "finish training!" << endl;
 
+		cout << "finish training!" << endl;
+		cout << "train data size: " << ptr_train_data->size << endl;
+		cout << "test data size: " << ptr_test_data->size << endl;
+
+	}
+
+
+
+
+
+	vector<float> predict_list(const record_array & rcd_array) {
 		// predicting stage
 		unsigned int j = 0;
 		unsigned int train_start = 0;
@@ -92,21 +108,28 @@ public:
 		unsigned int test_user = ptr_test_data->data[0].user;
 
 
+		vector<float>results;
+		results.resize(rcd_array.size);
+
+
+
 		for (int i = 0; i < ptr_test_data->size; i++) {
 
-			vec Hu = zeros<vec>(F);
 			record r_test = ptr_test_data->data[i];
 
 			if ((test_user != r_test.user) || i == ptr_test_data->size -1) {
+				
+				vec Hu = zeros<vec>(F);
+				
 				// make prediction of test_user for movies in the test set
-				test_end = i;
+				test_end = (i == ptr_test_data->size-1) ? (i + 1) : i;
 
 				// find train_start and train_end
 				// record r_train = ptr_train_data->data[j];
 				record r_train;
 				r_train.user = 0;
 
-				while ((r_train.user <= test_user) && j < ptr_train_data->size) {
+				while ((r_train.user <= test_user) && (j < ptr_train_data->size)) {
 					r_train = ptr_train_data->data[j];
 
 					if (r_train.user < test_user) {
@@ -164,7 +187,9 @@ public:
 							predict_score += (k+1) * rating_probs(k);
 						}
 
-						cout << predict_score << "  ";
+						// cout << predict_score << "  ";
+						results[u] = predict_score;
+
 					}
 
 				} else {
@@ -172,6 +197,7 @@ public:
 					float predict_score;
 					for (int u = test_start; u < test_end; u++) {
 						predict_score = 3.5;
+						results[u] = predict_score;
 					}
 				}
 
@@ -186,37 +212,27 @@ public:
 		cout << "finish predicting!" << endl;
 
 
-		// unsigned int j = 0;
-		// user_id = 0;
-		// start = 0;
-		// end = 0;
-		// for (int i = 0; i < ptr_test_data->size; i++) {
-		// 	record test_r = ptr_test_data->data[i];
-		// 	while (user_id < test_r.user && j < ptr_train_data->size) {
-		// 		user_id = ptr_train_data->data[i].user_id;
-		// 		j++;
-		// 	}
-		// 	if (user_id == test_r.user) {
-		// 		start = j;
-		// 		while (user_id == test_r.user && j < ptr_train_data->size) {
-		// 			j++;
-		// 		}
-		// 		end = j;
-		// 		// TODO: make prediction with train_data[start:end] and test_r
-		// 	}
-		// 	else {
-		// 		; // TODO: the user has no previous ratings. Return the average movie rating
-		// 	}
+		// ceil and floor result
+		for (int i = 0; i < ptr_test_data->size; i++) {
+			if (results[i] > 5)
+				results[i] = 5;
+			else if (results[i] < 1) 
+				results[i] = 1;
+		}
 
-		// 	start = j;
+		// store predicted data to file
+	    ofstream out_file("test_rbm_out.txt");
+	    for (int i = 0; i < ptr_test_data->size; i++) {
+	    	out_file << results[i] << endl;
+	    }
 
-		// }
-
-
+	    return results;
 
 	}
 
-	virtual float predict(const record & rcd) const{
+
+
+	virtual float predict(const record & rcd) {
 
 		return 0.0;
 	}
@@ -355,13 +371,22 @@ int main () {
 	basic_rbm rbm;
 
 	rbm.ptr_train_data = &train_data;
-	rbm.fit(train_data);
 
 
 	record_array test_data;
 	test_data.load(test_file_name.c_str());
+	cout << "finish loading " << test_file_name << endl;
 	rbm.ptr_test_data = &test_data;
-	// rbm.predict_list();
+
+
+	unsigned int iter_num = 1;
+	rbm.fit(train_data, iter_num);
+	vector<float>results = rbm.predict_list(test_data);
+
+	cout << "RMSE: " << RMSE(test_data, results) << endl;
+
+
+
 }
 
 
