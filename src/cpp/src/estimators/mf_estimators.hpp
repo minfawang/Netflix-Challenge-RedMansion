@@ -8,6 +8,7 @@
 
 const int MAX_DATE = 2243;
 const double PI = 3.141592653589793238463;
+const int N_THREADS = 8;
 
 #define _TEST_NAN
 
@@ -16,6 +17,9 @@ const double PI = 3.141592653589793238463;
 #define __MF_ESTIMATORS
 
 using namespace arma;
+
+
+
 
 class basic_mf : public estimator_base {
 public:
@@ -29,6 +33,7 @@ public:
 	mat V;
 	vec A;
 	vec B;
+
 	double mu;
 
 	double lambda;
@@ -42,12 +47,12 @@ public:
 
 
 	basic_mf() {
-		K = 100;
+		K = 200;
 
 		initialized = false;
 		ptr_test_data = NULL;
 		lambda = 0.05;
-		learning_rate = 0.0005;
+		learning_rate = 0.001;
 		learning_rate_mul = 1;
 		
 	}
@@ -201,6 +206,7 @@ public:
  #pragma omp parallel for num_threads(8)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
+					
 					//reshuffle(shuffle_idx_batch, batch_size);
 
 					for (int j = 0; j < batch_size; j++) {
@@ -596,6 +602,11 @@ public:
 	uvec date_origin_user;
 	uvec date_origin_movie;
 
+
+	struct {
+		vec U_col;
+	} update_temp_var_thread[N_THREADS];
+
 	double mu;
 
 	unsigned int K;
@@ -612,10 +623,6 @@ public:
 	mutex cos_buffer_lock;
 	unordered_map<float, float> sin_buffer;
 	mutex sin_buffer_lock;
-
-	
-
-
 
 	beta_mf() {
 		K = 20;
@@ -671,7 +678,8 @@ public:
 		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
 		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 
-		vec U_col = U0.col(i) + U1.col(i) * eval_function(U1_function_table, d - date_origin_user[i]);
+		vec U_col(K);
+	    fang_add_mul_rtn(U_col, U0.colptr(i), U1.colptr(i), eval_function(U1_function_table, d - date_origin_user[i]), U0.n_rows);
 
 		double result = mu + dot(U_col, V.unsafe_col(j));
 
@@ -707,7 +715,7 @@ public:
 	}
 
 
-	void update(const record & rcd) {
+	void update(const record & rcd, unsigned int tid) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
 
 		double r_pFpX;
@@ -716,7 +724,8 @@ public:
 		double *U1i = U1.colptr(i);
 		double u = eval_function(U1_function_table, d - date_origin_user[i]);
 
-		vec U_col = U0.unsafe_col(i) + U1.unsafe_col(i) * u;
+		vec &U_col = update_temp_var_thread[tid].U_col;
+		fang_add_mul_rtn(U_col, U0i, U1i, u, U0.n_rows);
 
 		double *Vj = V.colptr(j);
 		double UiVj = dot(U_col, V.unsafe_col(j));
@@ -935,6 +944,11 @@ public:
 				B_shrink[i] = 1 - B_lambda[i];
 			}
 
+			// Regenerate U_col
+			for (unsigned int i = 0; i < N_THREADS; i++) {
+				update_temp_var_thread[i].U_col.resize(K);
+			}
+
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
 
 				tmr.tic();
@@ -943,7 +957,7 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-#pragma omp parallel for num_threads(8)
+#pragma omp parallel for num_threads(N_THREADS)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
 					//reshuffle(shuffle_idx_batch, batch_size);
@@ -954,7 +968,7 @@ public:
 						// shuffle_idx_batch[j] do harm to the result
 						if (index < train_data.size) {
 							const record& rcd = train_data[index];
-							update(rcd);
+							update(rcd, omp_get_thread_num());
 						}
 					}
 
@@ -975,6 +989,7 @@ public:
 
 				cout << "\t\t";
 				cout << max(max(abs(U0))) << ' '
+					<< max(max(abs(U1))) << ' '
 					<< max(max(abs(V))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
