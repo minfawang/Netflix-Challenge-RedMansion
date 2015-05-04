@@ -1,3 +1,5 @@
+#include <armadillo>
+using namespace arma;
 #ifndef __FANG
 #define __FANG
 
@@ -19,12 +21,10 @@ void fang_add_mul(double * colptr_a, double * colptr_b, double k, unsigned int n
 	}
 }
 
-vec fang_add_mul_rtn(double * colptr_a, double * colptr_b, double k, unsigned int n) {
-	vec result(n);
+void fang_add_mul_rtn(vec& result, double * colptr_a, double * colptr_b, double k, unsigned int n) {
 	for (unsigned int i = 0; i < n; i++) {
 		result[i] = colptr_a[i] + colptr_b[i] * k;
 	}
-	return result;
 }
 
 void fang_positive(double * colptr_a, unsigned int n) {
