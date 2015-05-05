@@ -280,7 +280,9 @@ public:
 	double lambda;
 	double learning_rate;
 	double learning_rate_per_record;
+
 	double learning_rate_mul;
+
 
 
 
@@ -599,24 +601,39 @@ public:
 	// (F_j, t + MaxDate)
 	mat B_function_table;
 
+	mat A_timebin;
+	mat B_timebin;
+
 	uvec date_origin_user;
 	uvec date_origin_movie;
 
 
 	struct {
 		vec U_col;
+		vec A_function_val;
+		vec B_function_val;
 	} update_temp_var_thread[N_THREADS];
 
 	double mu;
+	double scale;
 
 	unsigned int K;
 	unsigned int F_i;
 	unsigned int F_j;
+	unsigned int D_u;
+	unsigned int D_i;
+
+	double U0_lambda;
+	double U1_lambda;
+	double V_lambda;
 
 	double lambda;
+
 	double learning_rate;
 	double learning_rate_per_record;
+
 	double learning_rate_mul;
+	double learning_rate_min;
 
 	//unordered_map<pair<double, double>, double> pow_buffer;
 	unordered_map<float, float> cos_buffer;
@@ -626,12 +643,23 @@ public:
 
 	beta_mf() {
 		K = 20;
+		D_u = 20;
+		D_i = 20;
 
 		initialized = false;
 		ptr_test_data = NULL;
+
+
+		U0_lambda = 0.05;
+		U1_lambda = 0.01;
+		V_lambda = 0.25;
+
 		lambda = 0.05;
-		learning_rate = 0.0005;
-		learning_rate_mul = 1;
+
+		learning_rate = 0.002;
+
+		learning_rate_mul = 0.99;
+		learning_rate_min = 0.005;
 	}
 
 	virtual bool save(const char * file_name) {
@@ -673,11 +701,15 @@ public:
 		return function_table.unsafe_col(t + MAX_DATE);
 	}
 
+	unsigned int get_timebin(const unsigned int date, const unsigned int D) const{
+		return (date - 1) * D / MAX_DATE;
+	}
+
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
+		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
 		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
 		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
-
 		vec U_col(K);
 	    fang_add_mul_rtn(U_col, U0.colptr(i), U1.colptr(i), eval_function(U1_function_table, d - date_origin_user[i]), U0.n_rows);
 
@@ -685,6 +717,9 @@ public:
 
 		result += dot(A_func_val, A.col(i));
 		result += dot(B_func_val, B.col(j));
+
+		result += A_timebin(d_i, i);
+		result += B_timebin(d_j, j);
 
 		if (result > 5) {
 			result = 5;
@@ -717,6 +752,7 @@ public:
 
 	void update(const record & rcd, unsigned int tid) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
+		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
 
 		double r_pFpX;
 
@@ -725,6 +761,9 @@ public:
 		double u = eval_function(U1_function_table, d - date_origin_user[i]);
 
 		vec &U_col = update_temp_var_thread[tid].U_col;
+		vec &A_func_val = update_temp_var_thread[tid].A_function_val;
+		vec &B_func_val = update_temp_var_thread[tid].B_function_val;
+
 		fang_add_mul_rtn(U_col, U0i, U1i, u, U0.n_rows);
 
 		double *Vj = V.colptr(j);
@@ -732,12 +771,14 @@ public:
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
-		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
-		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
+		A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
+		B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 
 		double result = mu + UiVj;
-		result += dot(A_func_val, A.col(i));
-		result += dot(B_func_val, B.col(j));
+		result += dot(A_func_val, A.unsafe_col(i));
+		result += dot(B_func_val, B.unsafe_col(j));
+		result += A_timebin(d_i, i);
+		result += B_timebin(d_j, j);
 
 #ifdef _TEST_NAN
 		if (isnan(result)) {
@@ -768,9 +809,15 @@ public:
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
 		fang_add_mul(B.colptr(j), B_func_val.memptr(), r_pFpX, B_func_val.n_rows);
 
+		A_timebin(d_i, i) += r_pFpX;
+		B_timebin(d_j, j) += r_pFpX;
+
 	}
 
 	void init(const record_array & train_data) {
+		// Set scale
+		scale = 1;
+
 		unsigned int n_user = 0, n_movie = 0;
 		// Calculate n_user and n_movies
 		for (int i = 0; i < train_data.size; i++) {
@@ -843,6 +890,10 @@ public:
 		U1.set_size(K, n_user);
 		V.set_size(K, n_movie);
 
+		A_timebin.set_size(D_u, n_user);
+		B_timebin.set_size(D_i, n_movie);
+
+
 		function_table_generator ftg;
 		vector<double> A_lambda_raw;
 		vector<double> B_lambda_raw;
@@ -853,40 +904,43 @@ public:
 		// A table
 
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.const_table());
-		A_lambda_raw.push_back(0.05);
+		A_lambda_raw.push_back(lambda);
 
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
-		A_lambda_raw.push_back(0.05);
+		A_lambda_raw.push_back(lambda);
 
-		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1));
-		A_lambda_raw.push_back(0.05);
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.5));
+		A_lambda_raw.push_back(lambda);
 
-		//for (int i = 1; i <= 16; i+=5) {
-		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
-		//	A_lambda_raw.push_back(0.05);
-
-		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
-		//	A_lambda_raw.push_back(0.05);
-		//}
 
 		// B table
 		
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.const_table());
-		B_lambda_raw.push_back(0.05);
+		B_lambda_raw.push_back(lambda);
 
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
-		B_lambda_raw.push_back(0.05);
+		B_lambda_raw.push_back(lambda);
 
-		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1));
-		B_lambda_raw.push_back(0.05);
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.5));
+		B_lambda_raw.push_back(lambda);
 
-		//for (int i = 1; i <= 16; i+=3) {
-		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
-		//	B_lambda_raw.push_back(0.05);
+		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
+		for (int i = 0; i <= w_list.size(); i++) {
+			double w = w_list[i];
+			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
+			A_lambda_raw.push_back(0.05);
 
-		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
-		//	B_lambda_raw.push_back(0.05);
-		//}
+			A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
+			A_lambda_raw.push_back(0.05);
+
+			B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
+			B_lambda_raw.push_back(0.05);
+
+			B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
+			B_lambda_raw.push_back(0.05);
+		}
+
+
 
 		A.resize(A_function_table.n_rows, n_user);
 		B.resize(B_function_table.n_rows, n_movie);
@@ -899,6 +953,8 @@ public:
 		V.fill(fill::randu);
 		A.fill(fill::randu);
 		B.fill(fill::randu);
+		A_timebin.fill(fill::zeros);
+		B_timebin.fill(fill::zeros);
 
 	}
 
@@ -906,11 +962,11 @@ public:
 		try {
 			unsigned int batch_size = 1000;
 			unsigned int block_size = train_data.size / batch_size / 16;
-			double shrink = 1 - lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
 			unsigned int *shuffle_idx_batch;
 			timer tmr;
+
 
 			tmr.display_mode = 1;
 			learning_rate_per_record = learning_rate;
@@ -932,17 +988,8 @@ public:
 				init(train_data);
 			}
 
-			// Recalculate all the shrinks
-			vec A_shrink(A.n_rows);
-			vec B_shrink(B.n_rows);
+			
 
-			for (unsigned int i = 0; i < A.n_rows; i++) {
-				A_shrink[i] = 1 - A_lambda[i];
-			}
-
-			for (unsigned int i = 0; i < B.n_rows; i++) {
-				B_shrink[i] = 1 - B_lambda[i];
-			}
 
 			// Regenerate U_col
 			for (unsigned int i = 0; i < N_THREADS; i++) {
@@ -996,17 +1043,33 @@ public:
 				cout << cos_buffer.size() << ' ' << sin_buffer.size() << endl;
 
 				if (i_iter != n_iter - 1) {
+					vec A_shrink(A.n_rows);
+					vec B_shrink(B.n_rows);
+					// Recalculate all the shrinks
+					for (unsigned int i = 0; i < A.n_rows; i++) {
+						A_shrink[i] = 1 - A_lambda[i];
+					}
+
+					for (unsigned int i = 0; i < B.n_rows; i++) {
+						B_shrink[i] = 1 - B_lambda[i];
+					}
+
 					// Regularization
-					U0 *= shrink;
-					U1 *= shrink;
-					V *= shrink;
+					U0 *= (1 - U0_lambda);
+					U1 *= (1 - U1_lambda);
+					V *= (1 - V_lambda);
+					A_timebin *= (1 - lambda);
+					B_timebin *= (1 - lambda);
+
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
 					}
 					for (unsigned int j = 0; j < B.n_cols; j++) {
 						B.col(j) %= B_shrink; // Element wise multiplication
 					}
-					learning_rate_per_record *= learning_rate_mul;
+					
+					scale = scale * learning_rate_mul * (1 - learning_rate_min)+ learning_rate_min;
+					learning_rate_per_record = learning_rate * scale;
 				}
 			}
 			delete[]shuffle_idx;
