@@ -140,16 +140,16 @@ public:
 		ptr_test_data = NULL;
 
 		
-		U0_lambda = 0.05;
-		U1_lambda = 0.01;
-		V_lambda = 0.25;
-		lambda = 0.05;
+		U0_lambda = 0.0001;
+		U1_lambda = 0.1;
+		V_lambda = 0.0001;
+		lambda = 0.0001;
 
 		// learning_rate = 0.002;
-		learning_rate = 0.00051
+		learning_rate = 0.005;
 
-		learning_rate_mul = 0.99;
-		learning_rate_min = 0.005;
+		learning_rate_mul = 1;
+		learning_rate_min = 0;
 	}
 
 	virtual bool save(const char * file_name) {
@@ -396,11 +396,11 @@ public:
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.const_table());
 		A_lambda_raw.push_back(lambda);
 
-		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
-		A_lambda_raw.push_back(lambda);
+		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
+		//A_lambda_raw.push_back(lambda);
 
-		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.5));
-		A_lambda_raw.push_back(lambda);
+		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.5));
+		//A_lambda_raw.push_back(lambda);
 
 
 		// B table
@@ -408,27 +408,27 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.const_table());
 		B_lambda_raw.push_back(lambda);
 
-		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
-		B_lambda_raw.push_back(lambda);
+		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
+		//B_lambda_raw.push_back(lambda);
 
-		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.5));
-		B_lambda_raw.push_back(lambda);
+		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.5));
+		//B_lambda_raw.push_back(lambda);
 
-		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
-		for (int i = 0; i <= w_list.size(); i++) {
-			double w = w_list[i];
-			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
-			A_lambda_raw.push_back(0.05);
+		//vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
+		//for (int i = 0; i <= w_list.size(); i++) {
+		//	double w = w_list[i];
+		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
+		//	A_lambda_raw.push_back(lambda);
 
-			A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
-			A_lambda_raw.push_back(0.05);
+		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
+		//	A_lambda_raw.push_back(lambda);
 
-			B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
-			B_lambda_raw.push_back(0.05);
+		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
+		//	B_lambda_raw.push_back(lambda);
 
-			B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
-			B_lambda_raw.push_back(0.05);
-		}
+		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
+		//	B_lambda_raw.push_back(lambda);
+		//}
 
 
 
@@ -537,19 +537,19 @@ public:
 					vec B_shrink(B.n_rows);
 					// Recalculate all the shrinks
 					for (unsigned int i = 0; i < A.n_rows; i++) {
-						A_shrink[i] = 1 - A_lambda[i];
+						A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, train_data.size);
 					}
 
 					for (unsigned int i = 0; i < B.n_rows; i++) {
-						B_shrink[i] = 1 - B_lambda[i];
+						B_shrink[i] = pow(1 - B_lambda[i] * learning_rate_per_record, train_data.size);
 					}
 
 					// Regularization
-					U0 *= (1 - U0_lambda);
-					U1 *= (1 - U1_lambda);
-					V *= (1 - V_lambda);
-					A_timebin *= (1 - lambda);
-					B_timebin *= (1 - lambda);
+					U0 *= pow(1 - U0_lambda * learning_rate_per_record, train_data.size);
+					U1 *= pow(1 - U1_lambda * learning_rate_per_record, train_data.size);
+					V *= pow(1 - V_lambda * learning_rate_per_record, train_data.size);
+					A_timebin *= pow(1 - lambda * learning_rate_per_record, train_data.size);
+					B_timebin *= pow(1 - lambda * learning_rate_per_record, train_data.size);
 
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
@@ -558,7 +558,7 @@ public:
 						B.col(j) %= B_shrink; // Element wise multiplication
 					}
 					
-					scale = scale * learning_rate_mul * (1 - learning_rate_min)+ learning_rate_min;
+					// scale = scale * learning_rate_mul * (1 - learning_rate_min)+ learning_rate_min;
 					learning_rate_per_record = learning_rate * scale;
 				}
 			}
