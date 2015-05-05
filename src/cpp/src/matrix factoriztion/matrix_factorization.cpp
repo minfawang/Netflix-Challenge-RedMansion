@@ -8,8 +8,21 @@ using namespace arma;
 int main(int argc, char * argv[]) {
 
 	unsigned int n_iter = 100;
-	if (argc == 2) {
+	float learning_rate = 0.0015;
+	float lambda_factor = 1000000;
+	float U0_lambda = 0.0001;
+	float U1_lambda = 0.1;
+	float V_lambda = 0.001;
+	float lambda = 0.0001;
+
+	if (argc == 8) {
 		n_iter = atoi(argv[1]);
+		learning_rate = atof(argv[2]);
+		lambda_factor = atof(argv[3]);
+		U0_lambda = atof(argv[4]);
+		U1_lambda = atof(argv[5]);
+		V_lambda = atof(argv[6]);
+		lambda = atof(argv[7]);
 	}
 
 	record_array main, prob, qual;
@@ -34,6 +47,14 @@ int main(int argc, char * argv[]) {
 	prob.load("prob_data.data");
 	qual.load("qual_data.data");
 #endif
+
+	est.learning_rate = learning_rate;
+	est.lambda_factor = lambda_factor;
+
+	est.U0_lambda = U0_lambda;
+	est.U1_lambda = U1_lambda;
+	est.V_lambda = V_lambda;
+	est.lambda = lambda;
 
 	est.ptr_test_data = &prob;
 

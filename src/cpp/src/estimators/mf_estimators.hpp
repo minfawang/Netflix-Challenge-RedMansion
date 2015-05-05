@@ -62,6 +62,15 @@ public:
 	}
 };
 
+	return function_table[t + MAX_DATE];
+}
+
+vec eval_functions(const mat &function_table, int t) {
+	return function_table.unsafe_col(t + MAX_DATE);
+}
+
+	return (date - 1) * D / MAX_DATE;
+}
 
 class gamma_mf : public estimator_base {
 public:
@@ -113,6 +122,8 @@ public:
 	unsigned int D_u;
 	unsigned int D_i;
 
+	double lambda_factor;
+
 	double U0_lambda;
 	double U1_lambda;
 	double V_lambda;
@@ -125,11 +136,6 @@ public:
 	double learning_rate_mul;
 	double learning_rate_min;
 
-	//unordered_map<pair<double, double>, double> pow_buffer;
-	unordered_map<float, float> cos_buffer;
-	mutex cos_buffer_lock;
-	unordered_map<float, float> sin_buffer;
-	mutex sin_buffer_lock;
 
 	gamma_mf() {
 		K = 20;
@@ -139,16 +145,16 @@ public:
 		initialized = false;
 		ptr_test_data = NULL;
 
-		
+		lambda_factor = 1;
 		U0_lambda = 0.0001;
 		U1_lambda = 0.1;
-		V_lambda = 0.0001;
+		V_lambda = 0.001;
 		lambda = 0.0001;
 
 		// learning_rate = 0.002;
 		learning_rate = 0.0015;
 
-		learning_rate_mul = 0.90;
+		learning_rate_mul = 0.9;
 		learning_rate_min = 0;
 	}
 
@@ -181,18 +187,6 @@ public:
 		input_file >> mu;
 		initialized = true;
 		return input_file.good();
-	}
-
-	double eval_function(const mat &function_table, int t) const{
-		return function_table[t + MAX_DATE];
-	}
-
-	vec eval_functions(const mat &function_table, int t) {
-		return function_table.unsafe_col(t + MAX_DATE);
-	}
-
-	unsigned int get_timebin(const unsigned int date, const unsigned int D) const{
-		return (date - 1) * D / MAX_DATE;
 	}
 
 	virtual float predict(const record & rcd) {
@@ -478,8 +472,6 @@ public:
 				init(train_data);
 			}
 
-			
-
 
 			// Regenerate U_col
 			for (unsigned int i = 0; i < N_THREADS; i++) {
@@ -530,26 +522,28 @@ public:
 					<< max(max(abs(V))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
-				cout << cos_buffer.size() << ' ' << sin_buffer.size() << endl;
 
 				if (i_iter != n_iter - 1) {
 					vec A_shrink(A.n_rows);
 					vec B_shrink(B.n_rows);
+
+					double regu_pwr = lambda_factor;
 					// Recalculate all the shrinks
 					for (unsigned int i = 0; i < A.n_rows; i++) {
-						A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, train_data.size);
+						A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, regu_pwr);
 					}
 
 					for (unsigned int i = 0; i < B.n_rows; i++) {
-						B_shrink[i] = pow(1 - B_lambda[i] * learning_rate_per_record, train_data.size);
+						B_shrink[i] = pow(1 - B_lambda[i] * learning_rate_per_record, regu_pwr);
 					}
 
 					// Regularization
-					U0 *= pow(1 - U0_lambda * learning_rate_per_record, train_data.size);
-					U1 *= pow(1 - U1_lambda * learning_rate_per_record, train_data.size);
-					V *= pow(1 - V_lambda * learning_rate_per_record, train_data.size);
-					A_timebin *= pow(1 - lambda * learning_rate_per_record, train_data.size);
-					B_timebin *= pow(1 - lambda * learning_rate_per_record, train_data.size);
+					
+					U0 *= pow(1 - U0_lambda * learning_rate_per_record, regu_pwr);
+					U1 *= pow(1 - U1_lambda * learning_rate_per_record, regu_pwr);
+					V *= pow(1 - V_lambda * learning_rate_per_record, regu_pwr);
+					A_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
+					B_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
 
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
@@ -573,3 +567,5 @@ public:
 };
 
 #endif
+
+
