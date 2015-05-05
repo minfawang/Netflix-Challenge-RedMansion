@@ -601,6 +601,9 @@ public:
 	// (F_j, t + MaxDate)
 	mat B_function_table;
 
+	mat A_timebin;
+	mat B_timebin;
+
 	uvec date_origin_user;
 	uvec date_origin_movie;
 
@@ -617,6 +620,8 @@ public:
 	unsigned int K;
 	unsigned int F_i;
 	unsigned int F_j;
+	unsigned int D_u;
+	unsigned int D_i;
 
 	double U0_lambda;
 	double U1_lambda;
@@ -638,6 +643,8 @@ public:
 
 	beta_mf() {
 		K = 20;
+		D_u = 20;
+		D_i = 20;
 
 		initialized = false;
 		ptr_test_data = NULL;
@@ -694,8 +701,13 @@ public:
 		return function_table.unsafe_col(t + MAX_DATE);
 	}
 
+	unsigned int get_timebin(const unsigned int date, const unsigned int D) const{
+		return (date - 1) * D / MAX_DATE;
+	}
+
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
+		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
 		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
 		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 		vec U_col(K);
@@ -705,6 +717,9 @@ public:
 
 		result += dot(A_func_val, A.col(i));
 		result += dot(B_func_val, B.col(j));
+
+		result += A_timebin(d_i, i);
+		result += B_timebin(d_j, j);
 
 		if (result > 5) {
 			result = 5;
@@ -737,6 +752,7 @@ public:
 
 	void update(const record & rcd, unsigned int tid) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
+		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
 
 		double r_pFpX;
 
@@ -761,6 +777,8 @@ public:
 		double result = mu + UiVj;
 		result += dot(A_func_val, A.unsafe_col(i));
 		result += dot(B_func_val, B.unsafe_col(j));
+		result += A_timebin(d_i, i);
+		result += B_timebin(d_j, j);
 
 #ifdef _TEST_NAN
 		if (isnan(result)) {
@@ -790,6 +808,9 @@ public:
 
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
 		fang_add_mul(B.colptr(j), B_func_val.memptr(), r_pFpX, B_func_val.n_rows);
+
+		A_timebin(d_i, i) += r_pFpX;
+		B_timebin(d_j, j) += r_pFpX;
 
 	}
 
@@ -869,6 +890,10 @@ public:
 		U1.set_size(K, n_user);
 		V.set_size(K, n_movie);
 
+		A_timebin.set_size(D_u, n_user);
+		B_timebin.set_size(D_i, n_movie);
+
+
 		function_table_generator ftg;
 		vector<double> A_lambda_raw;
 		vector<double> B_lambda_raw;
@@ -928,6 +953,8 @@ public:
 		V.fill(fill::randu);
 		A.fill(fill::randu);
 		B.fill(fill::randu);
+		A_timebin.fill(fill::zeros);
+		B_timebin.fill(fill::zeros);
 
 	}
 
@@ -1031,6 +1058,8 @@ public:
 					U0 *= (1 - U0_lambda);
 					U1 *= (1 - U1_lambda);
 					V *= (1 - V_lambda);
+					A_timebin *= (1 - lambda);
+					B_timebin *= (1 - lambda);
 
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
