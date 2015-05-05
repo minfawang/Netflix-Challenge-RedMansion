@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 60;
+	unsigned int n_iter = 500;
 	if (argc == 2) {
 		n_iter = atoi(argv[1]);
 	}
@@ -22,7 +22,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 0
+#define _USE_MINI_SET 1
 #define _TEST_SAVE_AND_LOAD 0
 
 

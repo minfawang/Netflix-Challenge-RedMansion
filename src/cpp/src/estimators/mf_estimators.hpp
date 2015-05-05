@@ -605,15 +605,22 @@ public:
 
 	struct {
 		vec U_col;
+		vec A_function_val;
+		vec B_function_val;
 	} update_temp_var_thread[N_THREADS];
 
 	double mu;
+	double scale;
 
 	unsigned int K;
 	unsigned int F_i;
 	unsigned int F_j;
 
-	double lambda;
+	double U0_lambda;
+	double U1_lambda;
+	double V_lambda;
+
+
 	double learning_rate;
 	double learning_rate_per_record;
 	double learning_rate_mul;
@@ -629,9 +636,15 @@ public:
 
 		initialized = false;
 		ptr_test_data = NULL;
-		lambda = 0.05;
+
+
+		U0_lambda = 0.05;
+		U1_lambda = 0.1;
+		V_lambda = 0.05;
+
+
 		learning_rate = 0.0005;
-		learning_rate_mul = 1;
+		learning_rate_mul = 0.98;
 	}
 
 	virtual bool save(const char * file_name) {
@@ -677,7 +690,6 @@ public:
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
 		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
 		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
-
 		vec U_col(K);
 	    fang_add_mul_rtn(U_col, U0.colptr(i), U1.colptr(i), eval_function(U1_function_table, d - date_origin_user[i]), U0.n_rows);
 
@@ -725,6 +737,9 @@ public:
 		double u = eval_function(U1_function_table, d - date_origin_user[i]);
 
 		vec &U_col = update_temp_var_thread[tid].U_col;
+		vec &A_func_val = update_temp_var_thread[tid].A_function_val;
+		vec &B_func_val = update_temp_var_thread[tid].B_function_val;
+
 		fang_add_mul_rtn(U_col, U0i, U1i, u, U0.n_rows);
 
 		double *Vj = V.colptr(j);
@@ -732,12 +747,12 @@ public:
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
-		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
-		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
+		A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
+		B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 
 		double result = mu + UiVj;
-		result += dot(A_func_val, A.col(i));
-		result += dot(B_func_val, B.col(j));
+		result += dot(A_func_val, A.unsafe_col(i));
+		result += dot(B_func_val, B.unsafe_col(j));
 
 #ifdef _TEST_NAN
 		if (isnan(result)) {
@@ -771,6 +786,9 @@ public:
 	}
 
 	void init(const record_array & train_data) {
+		// Set scale
+		scale = 1;
+
 		unsigned int n_user = 0, n_movie = 0;
 		// Calculate n_user and n_movies
 		for (int i = 0; i < train_data.size; i++) {
@@ -906,11 +924,11 @@ public:
 		try {
 			unsigned int batch_size = 1000;
 			unsigned int block_size = train_data.size / batch_size / 16;
-			double shrink = 1 - lambda;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
 			unsigned int *shuffle_idx_batch;
 			timer tmr;
+
 
 			tmr.display_mode = 1;
 			learning_rate_per_record = learning_rate;
@@ -932,17 +950,8 @@ public:
 				init(train_data);
 			}
 
-			// Recalculate all the shrinks
-			vec A_shrink(A.n_rows);
-			vec B_shrink(B.n_rows);
+			
 
-			for (unsigned int i = 0; i < A.n_rows; i++) {
-				A_shrink[i] = 1 - A_lambda[i];
-			}
-
-			for (unsigned int i = 0; i < B.n_rows; i++) {
-				B_shrink[i] = 1 - B_lambda[i];
-			}
 
 			// Regenerate U_col
 			for (unsigned int i = 0; i < N_THREADS; i++) {
@@ -996,17 +1005,31 @@ public:
 				cout << cos_buffer.size() << ' ' << sin_buffer.size() << endl;
 
 				if (i_iter != n_iter - 1) {
+					vec A_shrink(A.n_rows);
+					vec B_shrink(B.n_rows);
+					// Recalculate all the shrinks
+					for (unsigned int i = 0; i < A.n_rows; i++) {
+						A_shrink[i] = 1 - A_lambda[i] * scale;
+					}
+
+					for (unsigned int i = 0; i < B.n_rows; i++) {
+						B_shrink[i] = 1 - B_lambda[i] * scale;
+					}
+
 					// Regularization
-					U0 *= shrink;
-					U1 *= shrink;
-					V *= shrink;
+					U0 *= (1 - U0_lambda * scale);
+					U1 *= (1 - U1_lambda * scale);
+					V *= (1 - V_lambda * scale);
+
 					for (unsigned int j = 0; j < A.n_cols; j++) {
 						A.col(j) %= A_shrink; // Element wise multiplication
 					}
 					for (unsigned int j = 0; j < B.n_cols; j++) {
 						B.col(j) %= B_shrink; // Element wise multiplication
 					}
-					learning_rate_per_record *= learning_rate_mul;
+					
+					scale *= learning_rate_mul;
+					learning_rate_per_record = learning_rate * scale;
 				}
 			}
 			delete[]shuffle_idx;
