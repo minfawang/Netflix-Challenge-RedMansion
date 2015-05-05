@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 50;
+	unsigned int n_iter = 80;
 	if (argc == 2) {
 		n_iter = atoi(argv[1]);
 	}

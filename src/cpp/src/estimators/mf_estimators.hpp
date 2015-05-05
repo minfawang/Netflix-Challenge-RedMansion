@@ -146,9 +146,9 @@ public:
 		lambda = 0.0001;
 
 		// learning_rate = 0.002;
-		learning_rate = 0.005;
+		learning_rate = 0.002;
 
-		learning_rate_mul = 1;
+		learning_rate_mul = 0.90;
 		learning_rate_min = 0;
 	}
 
@@ -396,10 +396,10 @@ public:
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.const_table());
 		A_lambda_raw.push_back(lambda);
 
-		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
-		//A_lambda_raw.push_back(lambda);
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
+		A_lambda_raw.push_back(lambda);
 
-		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.5));
+		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.2));
 		//A_lambda_raw.push_back(lambda);
 
 
@@ -408,27 +408,27 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.const_table());
 		B_lambda_raw.push_back(lambda);
 
-		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
+		B_lambda_raw.push_back(lambda);
+
+		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
 		//B_lambda_raw.push_back(lambda);
 
-		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.5));
-		//B_lambda_raw.push_back(lambda);
+		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
+		for (int i = 0; i <= w_list.size(); i++) {
+			double w = w_list[i];
+			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
+			A_lambda_raw.push_back(lambda);
 
-		//vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
-		//for (int i = 0; i <= w_list.size(); i++) {
-		//	double w = w_list[i];
-		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
-		//	A_lambda_raw.push_back(lambda);
+			A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
+			A_lambda_raw.push_back(lambda);
 
-		//	A_function_table.insert_rows(A_function_table.n_rows, ftg.cosw_table(i));
-		//	A_lambda_raw.push_back(lambda);
+			B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
+			B_lambda_raw.push_back(lambda);
 
-		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.sinw_table(i));
-		//	B_lambda_raw.push_back(lambda);
-
-		//	B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
-		//	B_lambda_raw.push_back(lambda);
-		//}
+			B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
+			B_lambda_raw.push_back(lambda);
+		}
 
 
 
