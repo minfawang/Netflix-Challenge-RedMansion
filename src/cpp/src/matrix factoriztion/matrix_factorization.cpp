@@ -13,7 +13,7 @@ int main(int argc, char * argv[]) {
 	}
 
 	record_array main, prob, qual;
-	beta_mf est;
+	gamma_mf est;
 
 	//constant_estimator est;
 
