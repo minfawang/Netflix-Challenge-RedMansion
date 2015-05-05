@@ -146,7 +146,7 @@ public:
 		lambda = 0.0001;
 
 		// learning_rate = 0.002;
-		learning_rate = 0.002;
+		learning_rate = 0.0015;
 
 		learning_rate_mul = 0.90;
 		learning_rate_min = 0;
