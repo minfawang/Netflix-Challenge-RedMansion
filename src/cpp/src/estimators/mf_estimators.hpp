@@ -652,7 +652,7 @@ public:
 		learning_rate = 0.002;
 
 		learning_rate_mul = 0.99;
-		learning_rate_min = 0.01;
+		learning_rate_min = 0.005;
 	}
 
 	virtual bool save(const char * file_name) {
@@ -884,7 +884,7 @@ public:
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
 		A_lambda_raw.push_back(lambda);
 
-		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1));
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.5));
 		A_lambda_raw.push_back(lambda);
 
 
@@ -896,10 +896,10 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
 		B_lambda_raw.push_back(lambda);
 
-		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1));
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.5));
 		B_lambda_raw.push_back(lambda);
 
-		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7, 2.0 * MAX_DATE / 90 };
+		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
 		for (int i = 0; i <= w_list.size(); i++) {
 			double w = w_list[i];
 			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
