@@ -7,12 +7,13 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 100;
-	float learning_rate = 0.0015;
+	unsigned int n_iter = 30;
+	float learning_rate = 0.008;
 	float lambda_factor = 1000000;
 	float U0_lambda = 0.0001;
-	float U1_lambda = 0.1;
-	float V_lambda = 0.001;
+	float U1_lambda = 0.0001;
+	float V_lambda = 0.0001;
+	float Y_lambda = 0.0001;
 	float lambda = 0.0001;
 
 	if (argc == 8) {
@@ -54,6 +55,7 @@ int main(int argc, char * argv[]) {
 	est.U0_lambda = U0_lambda;
 	est.U1_lambda = U1_lambda;
 	est.V_lambda = V_lambda;
+	est.Y_lambda = Y_lambda;
 	est.lambda = lambda;
 
 	est.ptr_test_data = &prob;
