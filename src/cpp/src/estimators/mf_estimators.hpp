@@ -62,6 +62,7 @@ public:
 	}
 };
 
+double eval_function(const mat &function_table, int t) {
 	return function_table[t + MAX_DATE];
 }
 
@@ -69,6 +70,7 @@ vec eval_functions(const mat &function_table, int t) {
 	return function_table.unsafe_col(t + MAX_DATE);
 }
 
+unsigned int get_timebin(const unsigned int date, const unsigned int D) {
 	return (date - 1) * D / MAX_DATE;
 }
 
@@ -85,6 +87,7 @@ public:
 	rowvec U1_function_table;
 
 	mat V;
+	mat Y;
 
 	// (F_i, n_user)
 	mat A;
@@ -111,7 +114,10 @@ public:
 		vec U_col;
 		vec A_function_val;
 		vec B_function_val;
+		vec Yi;
 	} update_temp_var_thread[N_THREADS];
+
+	vector<vector<unsigned int>> vote_list;
 
 	double mu;
 	double scale;
@@ -127,6 +133,7 @@ public:
 	double U0_lambda;
 	double U1_lambda;
 	double V_lambda;
+	double Y_lambda;
 
 	double lambda;
 
@@ -149,6 +156,8 @@ public:
 		U0_lambda = 0.0001;
 		U1_lambda = 0.1;
 		V_lambda = 0.001;
+		Y_lambda = 0.0001;
+
 		lambda = 0.0001;
 
 		// learning_rate = 0.002;
@@ -189,6 +198,26 @@ public:
 		return input_file.good();
 	}
 
+	void get_Y(vec& rtn, unsigned int i) {
+		rtn.resize(K);
+		rtn.fill(fill::zeros);
+		vector<unsigned int>& user_vote_list = vote_list[i];
+		for (unsigned int j : user_vote_list) {
+			rtn += Y.unsafe_col(j);
+		}
+		if (user_vote_list.size() > 0) {
+			rtn /= user_vote_list.size();
+		}
+	}
+
+	void update_Y(unsigned int i, double r_pFpX, double *Vj, unsigned int K) {
+		vector<unsigned int>& user_vote_list = vote_list[i];
+		r_pFpX /= user_vote_list.size();
+		for (unsigned int j : user_vote_list) {
+			fang_add_mul(Y.colptr(j), Vj, r_pFpX, K);
+		}
+	}
+
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
 		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
@@ -204,6 +233,11 @@ public:
 
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
+
+		vec Y_i;
+		get_Y(Y_i, i);
+		result += dot(V.unsafe_col(j), Y_i);
+
 
 		if (result > 5) {
 			result = 5;
@@ -247,6 +281,7 @@ public:
 		vec &U_col = update_temp_var_thread[tid].U_col;
 		vec &A_func_val = update_temp_var_thread[tid].A_function_val;
 		vec &B_func_val = update_temp_var_thread[tid].B_function_val;
+		vec &Yi = update_temp_var_thread[tid].Yi;
 
 		fang_add_mul_rtn(U_col, U0i, U1i, u, U0.n_rows);
 
@@ -264,8 +299,12 @@ public:
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
 
+		get_Y(Yi, i);
+		result += dot(V.unsafe_col(j), Yi);
+
 #ifdef _TEST_NAN
 		if (isnan(result)) {
+			cout << result << endl;
 			cout << mu << ' ' << UiVj << endl;
 			cout << "A" << endl;
 			cout << A_func_val;
@@ -273,6 +312,9 @@ public:
 			cout << "B" << endl;
 			cout << B_func_val;
 			cout << B.col(j);
+			cout << endl;
+			cout << "Y" << endl;
+			cout << Yi;
 			cout << endl;
 		}
 #endif
@@ -296,22 +338,13 @@ public:
 		A_timebin(d_i, i) += r_pFpX;
 		B_timebin(d_j, j) += r_pFpX;
 
+		update_Y(i, r_pFpX, Vj, K);
+
 	}
 
-	void init(const record_array & train_data) {
+	void init(const record_array & train_data, unsigned int n_user, unsigned int n_movie) {
 		// Set scale
 		scale = 1;
-
-		unsigned int n_user = 0, n_movie = 0;
-		// Calculate n_user and n_movies
-		for (int i = 0; i < train_data.size; i++) {
-			if (train_data[i].user > n_user) {
-				n_user = train_data[i].user;
-			}
-			if (train_data[i].movie > n_movie) {
-				n_movie = train_data[i].movie;
-			}
-		}
 
 		// Calculate mu
 		unsigned int cnt[6];
@@ -373,6 +406,7 @@ public:
 		U0.set_size(K, n_user);
 		U1.set_size(K, n_user);
 		V.set_size(K, n_movie);
+		Y.set_size(K, n_movie);
 
 		A_timebin.set_size(D_u, n_user);
 		B_timebin.set_size(D_i, n_movie);
@@ -393,8 +427,8 @@ public:
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
 		A_lambda_raw.push_back(lambda);
 
-		//A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.2));
-		//A_lambda_raw.push_back(lambda);
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.2));
+		A_lambda_raw.push_back(lambda);
 
 
 		// B table
@@ -405,11 +439,11 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
 		B_lambda_raw.push_back(lambda);
 
-		//B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
-		//B_lambda_raw.push_back(lambda);
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
+		B_lambda_raw.push_back(lambda);
 
 		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
-		for (int i = 0; i <= w_list.size(); i++) {
+		for (int i = 0; i < w_list.size(); i++) {
 			double w = w_list[i];
 			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
 			A_lambda_raw.push_back(lambda);
@@ -435,6 +469,8 @@ public:
 		U0.fill(fill::randu);
 		U1.fill(fill::zeros);
 		V.fill(fill::randu);
+		Y.fill(fill::randu);
+
 		A.fill(fill::randu);
 		B.fill(fill::randu);
 		A_timebin.fill(fill::zeros);
@@ -448,12 +484,22 @@ public:
 			unsigned int block_size = train_data.size / batch_size / 16;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
-			unsigned int *shuffle_idx_batch;
+			unsigned int *shuffle_idx_batch[N_THREADS];
 			timer tmr;
 
 
 			tmr.display_mode = 1;
 			learning_rate_per_record = learning_rate;
+
+			// Calculate n_user and n_movies
+			for (int i = 0; i < train_data.size; i++) {
+				if (train_data[i].user > n_user) {
+					n_user = train_data[i].user;
+				}
+				if (train_data[i].movie > n_movie) {
+					n_movie = train_data[i].movie;
+				}
+			}
 
 			// Generate shuffle_idx
 			cout << train_data.size << endl;
@@ -463,13 +509,16 @@ public:
 				shuffle_idx[i] = i;
 			}
 
-			//shuffle_idx_batch = new unsigned int[batch_size];
-			//for (int i = 0; i < batch_size; i++) {
-			//	shuffle_idx_batch[i] = i;
-			//}
+			for (int i = 0; i < N_THREADS; i++) {
+
+				shuffle_idx_batch[i] = new unsigned int[batch_size];
+				for (int j = 0; j < batch_size; j++) {
+					shuffle_idx_batch[i][j] = j;
+				}
+			}
 
 			if (!continue_fit) {
-				init(train_data);
+				init(train_data, n_user, n_movie);
 			}
 
 
@@ -477,6 +526,17 @@ public:
 			for (unsigned int i = 0; i < N_THREADS; i++) {
 				update_temp_var_thread[i].U_col.resize(K);
 			}
+
+			tmr.tic();
+			// Regenerate the list of movies voted by one user
+			vote_list.resize(n_user);
+			for (unsigned int i = 0; i < n_user; i++) {
+				vote_list[i] = vector<unsigned int>();
+			}
+			for (unsigned int i = 0; i < train_data.size; i++) {
+				vote_list[train_data[i].user - 1].push_back(train_data[i].movie - 1);
+			}
+			tmr.toc();
 
 			for (int i_iter = 0; i_iter < n_iter; i_iter++) {
 
@@ -489,10 +549,11 @@ public:
 #pragma omp parallel for num_threads(N_THREADS)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
-					//reshuffle(shuffle_idx_batch, batch_size);
+
+					reshuffle(shuffle_idx_batch[omp_get_thread_num()], batch_size);
 
 					for (int j = 0; j < batch_size; j++) {
-						unsigned int index = index_base + j;
+						unsigned int index = index_base + shuffle_idx_batch[omp_get_thread_num()][j];
 
 						// shuffle_idx_batch[j] do harm to the result
 						if (index < train_data.size) {
@@ -510,6 +571,7 @@ public:
 					cout << fixed;
 					cout << setprecision(5);
 					cout << '\t' << RMSE(*ptr_test_data, result);
+					cout << '\t' << scale;
 				}
 
 
@@ -520,6 +582,7 @@ public:
 				cout << max(max(abs(U0))) << ' '
 					<< max(max(abs(U1))) << ' '
 					<< max(max(abs(V))) << ' '
+					<< max(max(abs(Y))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
 
@@ -542,6 +605,7 @@ public:
 					U0 *= pow(1 - U0_lambda * learning_rate_per_record, regu_pwr);
 					U1 *= pow(1 - U1_lambda * learning_rate_per_record, regu_pwr);
 					V *= pow(1 - V_lambda * learning_rate_per_record, regu_pwr);
+					Y *= pow(1 - Y_lambda * learning_rate_per_record, regu_pwr);
 					A_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
 					B_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
 
@@ -552,7 +616,7 @@ public:
 						B.col(j) %= B_shrink; // Element wise multiplication
 					}
 					
-					// scale = scale * learning_rate_mul * (1 - learning_rate_min)+ learning_rate_min;
+					scale = scale * learning_rate_mul;
 					learning_rate_per_record = learning_rate * scale;
 				}
 			}
