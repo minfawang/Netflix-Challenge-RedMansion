@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 30;
+	unsigned int n_iter = 200;
 	float learning_rate = 0.008;
 	float lambda_factor = 1000000;
 	float U0_lambda = 0.00008;
@@ -16,14 +16,15 @@ int main(int argc, char * argv[]) {
 	float Y_lambda = 0.00008;
 	float lambda = 0.0001;
 
-	if (argc == 8) {
+	if (argc == 9) {
 		n_iter = atoi(argv[1]);
 		learning_rate = atof(argv[2]);
 		lambda_factor = atof(argv[3]);
 		U0_lambda = atof(argv[4]);
 		U1_lambda = atof(argv[5]);
 		V_lambda = atof(argv[6]);
-		lambda = atof(argv[7]);
+		Y_lambda = atof(argv[7]);
+		lambda = atof(argv[8]);
 	}
 
 	record_array main, prob, qual;
@@ -59,6 +60,10 @@ int main(int argc, char * argv[]) {
 	est.lambda = lambda;
 
 	est.ptr_test_data = &prob;
+
+#if !_USE_MINI_SET
+	est.ptr_qual_data = &qual;
+#endif
 
 	cout << "Start to fit" << endl;
 

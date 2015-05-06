@@ -11,7 +11,7 @@ const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
 #define _TEST_NAN
-
+#define _USE_Y 1
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -81,6 +81,7 @@ public:
 	bool initialized;
 
 	record_array * ptr_test_data;
+	record_array * ptr_qual_data;
 
 	mat U0;
 	mat U1;
@@ -234,9 +235,11 @@ public:
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
 
+#if _USE_Y
 		vec Y_i;
 		get_Y(Y_i, i);
 		result += dot(V.unsafe_col(j), Y_i);
+#endif
 
 
 		if (result > 5) {
@@ -299,8 +302,10 @@ public:
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
 
+#if _USE_Y
 		get_Y(Yi, i);
 		result += dot(V.unsafe_col(j), Yi);
+#endif
 
 #ifdef _TEST_NAN
 		if (isnan(result)) {
@@ -338,7 +343,9 @@ public:
 		A_timebin(d_i, i) += r_pFpX;
 		B_timebin(d_j, j) += r_pFpX;
 
+#if _USE_Y
 		update_Y(i, r_pFpX, Vj, K);
+#endif
 
 	}
 
@@ -442,7 +449,7 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
 		B_lambda_raw.push_back(lambda);
 
-		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7};
+		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7, 2.0 * MAX_DATE / 90, 0.25, 1, 4};
 		for (int i = 0; i < w_list.size(); i++) {
 			double w = w_list[i];
 			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
@@ -585,6 +592,27 @@ public:
 					<< max(max(abs(Y))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
+
+				if (ptr_qual_data != NULL) {
+					auto result = this->predict_list(*ptr_qual_data);
+
+					cout << "Writting output file" << endl;
+
+					char buf[256];
+					sprintf(buf, "output\\output_iter_%d.txt", i_iter);
+
+					ofstream output_file(buf);
+
+					if (!output_file.is_open()) {
+						cerr << "Fail to open output file" << endl;
+						system("pause");
+						exit(-1);
+					}
+
+					for (int i = 0; i < result.size(); i++) {
+						output_file << result[i] << endl;
+					}
+				}
 
 				if (i_iter != n_iter - 1) {
 					vec A_shrink(A.n_rows);
