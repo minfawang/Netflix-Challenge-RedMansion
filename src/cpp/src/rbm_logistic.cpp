@@ -25,8 +25,8 @@ public:
 
 	cube W; // M * F * K
 	mat BV; // K * M
-	// mat BH; // K * F
 	vec BH; // F
+	// mat BH; // K * F
 
 	unsigned int N;
 	unsigned int M;
@@ -44,36 +44,18 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 40;
+		F = 80;
 		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 10;
 
 		W = randu<cube>(K, F, M) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
-		// BH = randu<mat>(K, F) / 8.0;
 		BH = randu<vec>(F) / 8.0;
+		// BH = randu<mat>(K, F) / 8.0;
 
 
-		CD_K = 10;
-		lrate = 0.0005;
-
-
-		// //TEST CODE
-		// // normalize W
-		// for (int i = 0; i < M; i++) {
-		// 	double sum_jk = 0;
-		// 	for (int j = 0; j < F; j++) {
-		// 		for (int k = 0; k < K; k++) {
-		// 			sum_jk += W(k, j, i);
-		// 		}
-		// 	}
-
-		// 	for (int j = 0; j < F; j++) {
-		// 		for (int k = 0; k < K; k++) {
-		// 			W(k, j, i) /= sum_jk;
-		// 		}
-		// 	}
-		// }
+		CD_K = 5;
+		lrate = 0.0001;
 
 
 	}
@@ -185,21 +167,23 @@ public:
 
 				// find train_start and train_end
 				// record r_train = ptr_train_data->data[j];
-				record r_train;
-				r_train.user = 0;
 
-				while ((r_train.user <= test_user) && (j < ptr_train_data->size)) {
-					r_train = ptr_train_data->data[j];
+
+				while (j < ptr_train_data->size) {
+					record r_train = ptr_train_data->data[j];
 
 					if (r_train.user < test_user) {
 						train_start = j + 1;
+					} else if (r_train.user > test_user) {
+						break;
 					}
+
 					j++;
 				}
 
 				train_end = j;
 
-				if (ptr_train_data->data[j-1].user == r_test.user) {
+				if (ptr_train_data->data[j-1].user == test_user) {
 
 					// positive phase to compute Hu
 					for (int f = 0; f < F; f++) {
@@ -259,7 +243,7 @@ public:
 					// TODO: predict all movies to be 3.5
 					double predict_score;
 					for (int u = test_start; u < test_end; u++) {
-						predict_score = 3.5;
+						predict_score = 3.6;
 						results[u] = predict_score;
 					}
 				}
@@ -438,6 +422,8 @@ public:
 int main () {
 	string train_file_name = "../../data/mini_main.data";
 	string test_file_name = "../../data/mini_prob.data";
+	// string train_file_name = "../../data/main_data.data";
+	// string test_file_name = "../../data/prob_data.data";
 	
 	record_array train_data;
 	train_data.load(train_file_name.c_str());
@@ -455,13 +441,20 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 
 
-	unsigned int iter_num = 20;
+	unsigned int iter_num = 3;
 	rbm.fit(train_data, iter_num);
 
 	vector<float>results = rbm.predict_list(test_data);
 	cout << "RMSE: " << RMSE(test_data, results) << endl;
 
 
+	// store results
+	ofstream rbm_out_file;
+	rbm_out_file.open("test_rbm_out.txt");
+	for (int i = 0; i < test_data.size; i++) {
+		rbm_out_file << results[i] << endl;
+	}
+	rbm_out_file.close();
 
 }
 

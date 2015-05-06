@@ -30,41 +30,68 @@ int main() {
 
 
 	/* test the percentage of user didn't rate any movie */
-	record_array mini_main, mini_prob;
+	record_array main_array, prob_array;
 	// string main_file_name = "../../data/main_data.data";
 	// string prob_file_name = "../../data/prob_data.data";
 	string main_file_name = "../../data/mini_main.data";
 	string prob_file_name = "../../data/mini_prob.data";
-	mini_main.load(main_file_name.c_str());
-	mini_prob.load(prob_file_name.c_str());
+	main_array.load(main_file_name.c_str());
+	prob_array.load(prob_file_name.c_str());
 
+	vector<float> results;
+	results.resize(prob_array.size);
 
 	int count_user_no_rating = 0;
 
 	int im = 0;
 	int ip = 0;
 
-	// int main_user = mini_main.data[0].user;
-	int prob_user = mini_prob.data[0].user;
+	int test_start = 0;
+	int test_end = 0;
+	int train_start = 0;
+	int train_end = 0;
 
-	while (ip < mini_prob.size) {
-		record prob_r = mini_prob.data[ip];
+	// int main_user = main_array.data[0].user;
+	int prob_user = prob_array.data[0].user;
+
+	while (ip < prob_array.size) {
+		record prob_r = prob_array.data[ip];
 		// when there is a new user in prob
 		if (prob_r.user != prob_user) {
-			while (im < mini_main.size) {
-				record main_r = mini_main.data[im];
+
+			test_end = ip;
+
+			// record main_r;
+			// main_r.user = 0;
+			while (im < main_array.size) {
+				record main_r = main_array.data[im];
 				if (main_r.user > prob_user) {
-					count_user_no_rating++;
 					break;
-				} else if (main_r.user == prob_user) {
-					break;
+				} else if (main_r.user < prob_user) {
+					train_start++;
 				}
 				im++;
 			}
+
+			// found a user match
+			if (main_array.data[im-1].user == prob_user) {
+				train_end = im;
+				for (int u = test_start; u < test_end; u++) {
+					results[u] = 0;
+				}
+
+			} else {
+				count_user_no_rating++;
+				for (int u = test_start; u < test_end; u++) {
+					results[u] = 3.6;
+				}
+			}
 			
+			train_start = im;
 
 			// update cur prob user
 			prob_user = prob_r.user;
+			test_start = ip;
 		}
 
 		ip ++;
