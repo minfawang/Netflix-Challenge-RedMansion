@@ -10,10 +10,10 @@ int main(int argc, char * argv[]) {
 	unsigned int n_iter = 30;
 	float learning_rate = 0.008;
 	float lambda_factor = 1000000;
-	float U0_lambda = 0.0001;
-	float U1_lambda = 0.0001;
-	float V_lambda = 0.0001;
-	float Y_lambda = 0.0001;
+	float U0_lambda = 0.00008;
+	float U1_lambda = 0.00008;
+	float V_lambda = 0.00008;
+	float Y_lambda = 0.00008;
 	float lambda = 0.0001;
 
 	if (argc == 8) {
