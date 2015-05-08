@@ -1,7 +1,6 @@
 #include <armadillo>
 #include <iostream>
 #include "types.hpp"
-// #include <shark/Unsupervised/RBM/BinaryRBM.h>
 
 
 #ifndef __RBM_ESTIMATORS
@@ -10,20 +9,30 @@
 using namespace arma;
 
 
+bool isFuckedUp(double num) {
+	return isnan(num) || isinf(num);
+}
+
+
+double sigma(double num) {
+	return 1.0 / (1 + exp(-num));
+}
+
+
 class basic_rbm : public estimator_base {
 public:
 
 	cube W; // M * F * K
 	mat BV; // K * M
-	// mat BH; // K * F
 	vec BH; // F
+	// mat BH; // K * F
 
 	unsigned int N;
 	unsigned int M;
 	unsigned int K;
 	unsigned int F;
 	unsigned int CD_K;
-	float lrate; // learning rate
+	double lrate; // learning rate
 
 
 	record_array *ptr_test_data;
@@ -34,18 +43,18 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 10;
+		F = 60;
 		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 10;
 
 		W = randu<cube>(K, F, M) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
-		// BH = randu<mat>(K, F) / 8.0;
 		BH = randu<vec>(F) / 8.0;
+		// BH = randu<mat>(K, F) / 8.0;
 
 
 		CD_K = 5;
-		lrate = 0.00001;
+		lrate = 0.0003;
 
 
 	}
@@ -64,6 +73,9 @@ public:
 
 		// training stage
 		for (int iter_num = 0; iter_num < n_iter; iter_num++) {
+			// TEST CODE
+			vector<float> results = predict_list(*ptr_test_data);
+			cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
 			
 			cout << "working on iteration " << iter_num << "..." << endl;
 
@@ -75,21 +87,49 @@ public:
 				record r = train_data.data[i];
 				if ((user_id != r.user) || i == train_data.size-1) {
 					end = (i == train_data.size-1) ? (i + 1) : i;
-					train((train_data.data+start), user_id, end - start, n_iter);
+					train((train_data.data+start), user_id, end - start);
 
 					user_id = r.user;
 					start = i;
 				}
-				// if (i % 1000000 == 0) {
-				// 	cout << "working on data " << i << " ..." << endl;
-				// }
 			}
+
+
+
+
+			// store predicted data to file
+			ofstream out_file;
+		    out_file.open("test_coeff.txt");
+
+		    // store W to file
+		    for (int i = 0; i < M; i++) {
+		    	for (int j = 0; j < F; j++) {
+		    		out_file << W(0, j, i) << " ";
+		    	}
+		    	out_file << endl;
+		    }
+
+		    // store BV to file
+		    for (int i = 0; i < M; i++) {
+		    	for (int k = 0; k < K; k++) {
+		    		out_file << BV(k, i) << " ";
+		    	}
+		    	out_file << endl;
+		    }
+		    
+		    // store BH to file
+		    for (int j = 0; j < F; j++) {
+		    	out_file << BH(j) << endl;
+		    }
+		    
+		    out_file.close();
 		}
 
 
 		cout << "finish training!" << endl;
 		cout << "train data size: " << ptr_train_data->size << endl;
 		cout << "test data size: " << ptr_test_data->size << endl;
+
 
 	}
 
@@ -107,6 +147,9 @@ public:
 		unsigned int train_user = ptr_train_data->data[0].user;
 		unsigned int test_user = ptr_test_data->data[0].user;
 
+		vec Hu = zeros<vec>(F);
+		vec Vum(K);
+		ivec scores = linspace<ivec>(1, 5, 5);
 
 		vector<float>results;
 		results.resize(rcd_array.size);
@@ -119,84 +162,60 @@ public:
 
 			if ((test_user != r_test.user) || i == ptr_test_data->size -1) {
 				
-				vec Hu = zeros<vec>(F);
-				
 				// make prediction of test_user for movies in the test set
 				test_end = (i == ptr_test_data->size-1) ? (i + 1) : i;
+				
+				int u_size = test_end - test_start;
 
 				// find train_start and train_end
 				// record r_train = ptr_train_data->data[j];
-				record r_train;
-				r_train.user = 0;
 
-				while ((r_train.user <= test_user) && (j < ptr_train_data->size)) {
-					r_train = ptr_train_data->data[j];
+
+				while (j < ptr_train_data->size) {
+					record r_train = ptr_train_data->data[j];
 
 					if (r_train.user < test_user) {
 						train_start = j + 1;
+					} else if (r_train.user > test_user) {
+						break;
 					}
+
 					j++;
 				}
 
 				train_end = j;
 
-				if (ptr_train_data->data[j-1].user == r_test.user) {
-					// positive phase to compute Hu
-					for (int f = 0; f < F; f++) {
-						Hu(f) = BH(f);
-					}
+				if (ptr_train_data->data[j-1].user == test_user) {
 
-					for (int u = train_start; u < train_end; u++) {
-						record r_train = ptr_train_data->data[u];
-						for (int f = 0; f < F; f++) {
+					// positive phase to compute Hu
+					Hu = BH;
+					for (int f = 0; f < F; f++) {
+						for (int u = train_start; u < train_end; u++) {
+							
+							record r_train = ptr_train_data->data[u];
 							unsigned int k = int(r_train.score) - 1;
-							float w = W(k, f, r_train.movie);
+							
+							double w = W(k, f, r_train.movie);
 							Hu(f) += w;
 						}
 					}
+					Hu = 1.0 / (1 + exp(-Hu));
+
 
 					// negative phase to predict score
 					for (int u = test_start; u < test_end; u++) {
 						record r_test = ptr_test_data->data[u];
-						vec rating_probs = zeros<vec>(K);
-						float predict_score = 0;
-
-						for (int k = 0; k < K; k++) {
-							rating_probs(k) = BV(k, r_test.movie);
-						}
-
-						for (int f = 0; f < F; f++) {
-							for (int k = 0; k < K; k++) {
-								float w = W(k, f, r_test.movie);
-								rating_probs(k) += w;
-							}
-						}
-
-						// normalize rating_probs
-						// QUESTION: Is it possible for prob to be less than 0?
-						float sum_k = 0;
-						for (int k = 0; k < K; k++) {
-							sum_k += rating_probs(k);
-						}
-						for (int k = 0; k < K; k++) {
-							rating_probs(k) /= sum_k;
-						}
-
-						// update predict score by taking average
-						for (int k = 0; k < K; k++) {
-							predict_score += (k+1) * rating_probs(k);
-						}
-
-						// cout << predict_score << "  ";
-						results[u] = predict_score;
+						Vum = normalise( exp(BV.col(r_test.movie) + W.slice(r_test.movie) * Hu), 1);
+						results[u] = dot(Vum, scores);
 
 					}
 
+
 				} else {
-					// TODO: predict all movies to be 3.5
-					float predict_score;
+					// TODO: predict all movies to be the averaged movie rating
+					double predict_score;
 					for (int u = test_start; u < test_end; u++) {
-						predict_score = 3.5;
+						predict_score = 3.6;
 						results[u] = predict_score;
 					}
 				}
@@ -209,22 +228,6 @@ public:
 			}
 		}
 
-		cout << "finish predicting!" << endl;
-
-
-		// ceil and floor result
-		for (int i = 0; i < ptr_test_data->size; i++) {
-			if (results[i] > 5)
-				results[i] = 5;
-			else if (results[i] < 1) 
-				results[i] = 1;
-		}
-
-		// store predicted data to file
-	    ofstream out_file("test_rbm_out.txt");
-	    for (int i = 0; i < ptr_test_data->size; i++) {
-	    	out_file << results[i] << endl;
-	    }
 
 	    return results;
 
@@ -240,7 +243,7 @@ public:
 
 
 
-	void train(const record *data, unsigned int user_id, unsigned int size, unsigned int n_iter = 1) {
+	void train(const record *data, unsigned int user_id, unsigned int size) {
 		// initialization
 		mat V0 = zeros<mat>(K, size);
 		mat Vt = zeros<mat>(K, size);
@@ -249,108 +252,59 @@ public:
 
 
 		// set up V0 and Vt based on the input data.
-		for (int k = 0; k < K; k++) {
-			for (int i = 0; i < size; i++) {
-				record r = data[i];
-				V0(int(r.score)-1, i) = 1; // score - 1 is the index
-				Vt(int(r.score)-1, i) = 1;
-			}
-		}
-
-		// set up H0 by V -> H
 		for (int i = 0; i < size; i++) {
 			record r = data[i];
+			V0(int(r.score)-1, i) = 1; // score - 1 is the index
+			Vt(int(r.score)-1, i) = 1;
 
-			for (int j = 0; j < F; j++) {
-				float bh = BH(j);
-
-				for (int k = 0; k < K; k++) {
-					float w = W(k, j, r.movie);
-					float v = Vt(k, i);
-
-					H0(j) += w * v + bh;
-				}
-			}
 		}
 
+		/*
+		/////////////////// set up H0 by V -> H //////////////////
+		H0(j) = sigma( BH(j) + sum_ik ( W(k, j, r.movie) * V0(k, i) ))
+		*/
 
-		// Do the contrastive divergence
+		H0 = BH;
+		for (int i = 0; i < size; i++) {
+			H0 += W.slice(data[i].movie).t() * V0.col(i);
+		}
+		H0 = 1.0 / (1 + exp(-H0));
+		
+
+
+		/////////////////// Do the contrastive divergence ///////////////////
 		for (int n = 0; n < CD_K; n++) {
 
-			// set H -> 0
-			Ht = zeros<vec>(F);
-
-			// positive phase: V -> H
-			// TODO: Do we need to normalize H(j)?
-			for (int i = 0; i < size; i++) {
-				record r = data[i];
-
-				for (int j = 0; j < F; j++) {
-					float bh = BH(j);
-					for (int k = 0; k < K; k++) {
-						float w = W(k, j, r.movie);
-						float v = Vt(k, i);
-
-						Ht(j) += w * v + bh;
-					}
-				}
+			////////////// positive phase: V -> H /////////
+			Ht = BH;
+			for (int i = 0; i < size; i ++) {
+				Ht += W.slice(data[i].movie).t() * Vt.col(i);
 			}
-
-			// set Vt -> 0
-			Vt = zeros<mat>(K, size);
-
+			Ht = 1.0 / (1 + exp(-Ht));
+			
 
 			// negative phase: H -> V
 			for (int i = 0; i < size; i++) {
 				record r = data[i];
-				for (int j = 0; j < F; j++) {
-					float h = Ht(j);
-
-					for (int k = 0; k < K; k++) {
-						float w = W(k, j, r.movie);
-
-						float bv = BV(k, r.movie);
-						Vt(k, i) = h * w + bv;
-					}
-				}
+				Vt.col(i) = exp(BV.col(r.movie) + W.slice(r.movie) * Ht);
 			}
 
 			// Normalize Vt -> sum_k (Vt(k, i)) = 1
-			for (int i = 0; i < size; i++) {
-				float sum_k = 0.0;
-				for (int k = 0; k < K; k++) {
-					sum_k += Vt(k, i);
-				}
-
-				for (int k = 0; k < K; k++) {
-					Vt(k, i) /= sum_k;
-				}
-			}
+			Vt = normalise(Vt, 1);
 
 		}
 
 		// update W
 		for (int i = 0; i < size; i++) {
-			record r = data[i];
-			for (int j = 0; j < F; j++) {
-				for (int k = 0; k < K; k++) {
-
-					W(k, j, r.movie) += lrate * (H0(j) * V0(k, i) - Ht(j) * Vt(k, i));
-				}
-			}
+			W.slice(data[i].movie) += lrate * (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
 		}
 
 		// update BH
-		for (int j = 0; j < F; j++) {
-			BH(j) += lrate * (H0(j) - Ht(j));
-		}
+		BH += lrate * (H0 - Ht);
 
 		// update BV
 		for (int i = 0; i < size; i++) {
-			record r = data[i];
-			for (int k = 0; k < K; k++) {
-				BV(k, r.movie) += lrate * (V0(k, i) - Vt(k, i));
-			}
+			BV.col(data[i].movie) += lrate * (V0.col(i) - Vt.col(i));
 		}
 
 	}
@@ -362,6 +316,8 @@ public:
 int main () {
 	string train_file_name = "../../data/mini_main.data";
 	string test_file_name = "../../data/mini_prob.data";
+	// string train_file_name = "../../data/main_data.data";
+	// string test_file_name = "../../data/prob_data.data";
 	
 	record_array train_data;
 	train_data.load(train_file_name.c_str());
@@ -379,13 +335,20 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 
 
-	unsigned int iter_num = 1;
+	unsigned int iter_num = 40;
 	rbm.fit(train_data, iter_num);
-	vector<float>results = rbm.predict_list(test_data);
 
+	vector<float>results = rbm.predict_list(test_data);
 	cout << "RMSE: " << RMSE(test_data, results) << endl;
 
 
+	// store results
+	ofstream rbm_out_file;
+	rbm_out_file.open("test_rbm_out.txt");
+	for (int i = 0; i < test_data.size; i++) {
+		rbm_out_file << results[i] << endl;
+	}
+	rbm_out_file.close();
 
 }
 

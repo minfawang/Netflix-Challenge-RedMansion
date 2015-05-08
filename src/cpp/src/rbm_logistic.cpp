@@ -44,7 +44,7 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 80;
+		F = 60;
 		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 10;
 
@@ -55,7 +55,7 @@ public:
 
 
 		CD_K = 5;
-		lrate = 0.0001;
+		lrate = 0.0003;
 
 
 	}
@@ -148,6 +148,9 @@ public:
 		unsigned int train_user = ptr_train_data->data[0].user;
 		unsigned int test_user = ptr_test_data->data[0].user;
 
+		vec Hu = zeros<vec>(F);
+		vec Vum(K);
+		ivec scores = linspace<ivec>(1, 5, 5);
 
 		vector<float>results;
 		results.resize(rcd_array.size);
@@ -160,10 +163,10 @@ public:
 
 			if ((test_user != r_test.user) || i == ptr_test_data->size -1) {
 				
-				vec Hu = zeros<vec>(F);
-				
 				// make prediction of test_user for movies in the test set
 				test_end = (i == ptr_test_data->size-1) ? (i + 1) : i;
+				
+				int u_size = test_end - test_start;
 
 				// find train_start and train_end
 				// record r_train = ptr_train_data->data[j];
@@ -186,8 +189,9 @@ public:
 				if (ptr_train_data->data[j-1].user == test_user) {
 
 					// positive phase to compute Hu
+					Hu = BH;
 					for (int f = 0; f < F; f++) {
-						Hu(f) = BH(f);
+						// Hu(f) = BH(f);
 						for (int u = train_start; u < train_end; u++) {
 							
 							record r_train = ptr_train_data->data[u];
@@ -197,47 +201,58 @@ public:
 							Hu(f) += w;
 						}
 
-						// TEST CODE
-						Hu(f) = sigma(Hu(f));
+						// Hu(f) = sigma(Hu(f));
 					}
+					Hu = 1.0 / (1 + exp(-Hu));
+
 
 					// negative phase to predict score
 					for (int u = test_start; u < test_end; u++) {
 						record r_test = ptr_test_data->data[u];
-						vec rating_probs = zeros<vec>(K);
-						double predict_score = 0;
-
-
-						for (int k = 0; k < K; k++) {
-							rating_probs(k) = BV(k, r_test.movie);
-							for (int f = 0; f < F; f++) {
-								double w = W(k, f, r_test.movie);
-								rating_probs(k) += w;
-							}
-
-							// TEST CODE
-							rating_probs(k) = exp(rating_probs(k));
-						}
-
-						// normalize rating_probs
-						// QUESTION: Is it possible for prob to be less than 0?
-						double sum_k = 0;
-						for (int k = 0; k < K; k++) {
-							sum_k += rating_probs(k);
-						}
-						for (int k = 0; k < K; k++) {
-							rating_probs(k) /= sum_k;
-						}
-
-						// update predict score by taking average
-						for (int k = 0; k < K; k++) {
-							predict_score += (k+1) * rating_probs(k);
-						}
-
-						// cout << predict_score << "  ";
-						results[u] = predict_score;
+						Vum = normalise( exp(BV.col(r_test.movie) + W.slice(r_test.movie) * Hu), 1);
+						results[u] = dot(Vum, scores);
 
 					}
+
+
+					/* way 2 */
+					// for (int u = test_start; u < test_end; u++) {
+					// 	record r_test = ptr_test_data->data[u];
+					// 	vec rating_probs = zeros<vec>(K);
+					// 	double predict_score = 0;
+
+
+					// 	for (int k = 0; k < K; k++) {
+					// 		rating_probs(k) = BV(k, r_test.movie);
+					// 		for (int f = 0; f < F; f++) {
+					// 			double w = W(k, f, r_test.movie); 
+					// 			double h = Hu(f);
+					// 			rating_probs(k) += w * h;
+					// 		}
+
+					// 		// TEST CODE
+					// 		rating_probs(k) = exp(rating_probs(k));
+					// 	}
+
+					// 	// normalize rating_probs
+					// 	// QUESTION: Is it possible for prob to be less than 0?
+					// 	double sum_k = 0;
+					// 	for (int k = 0; k < K; k++) {
+					// 		sum_k += rating_probs(k);
+					// 	}
+					// 	for (int k = 0; k < K; k++) {
+					// 		rating_probs(k) /= sum_k;
+					// 	}
+
+					// 	// update predict score by taking average
+					// 	for (int k = 0; k < K; k++) {
+					// 		predict_score += (k+1) * rating_probs(k);
+					// 	}
+
+					// 	// cout << predict_score << "  ";
+					// 	results[u] = predict_score;
+
+					// }
 
 				} else {
 					// TODO: predict all movies to be 3.5
@@ -294,11 +309,26 @@ public:
 			record r = data[i];
 			V0(int(r.score)-1, i) = 1; // score - 1 is the index
 			Vt(int(r.score)-1, i) = 1;
+
 		}
 
 
-		// set up H0 by V -> H
+
+		/*
+		/////////////////// set up H0 by V -> H //////////////////
+		H0(j) = sigma( BH(j) + sum_ik ( W(k, j, r.movie) * V0(k, i) ))
+		*/
+
+		/* way 1 */
+		H0 = BH;
+		for (int i = 0; i < size; i++) {
+			H0 += W.slice(data[i].movie).t() * V0.col(i);
+		}
+		H0 = 1.0 / (1 + exp(-H0));
+
+		/*  //////// way 2
 		for (int j = 0; j < F; j++) {
+
 			H0(j) = BH(j);
 
 			for (int i = 0; i < size; i++) {
@@ -312,105 +342,121 @@ public:
 				}
 			}
 
-			// TEST CODE
 			H0(j) = sigma(H0(j));
 		}
+		*/
+		
 
 
-
-		// Do the contrastive divergence
+		/////////////////// Do the contrastive divergence ///////////////////
 		for (int n = 0; n < CD_K; n++) {
 
-			// set H -> 0
-			Ht = zeros<vec>(F);
-
-			// positive phase: V -> H
-			// TODO: Do we need to normalize H(j)?
-			for (int j = 0; j < F; j++) {
-				Ht(j) = BH(j);
-
-				for (int i = 0; i < size; i++) {
-					record r = data[i];
-
-					for (int k = 0; k < K; k++) {
-						double w = W(k, j, r.movie);
-						double v = Vt(k, i);
-
-						Ht(j) += w * v;
-
-					}
-				}
-
-				// TEST CODE
-				Ht(j) = sigma(Ht(j));
+			////////////// positive phase: V -> H /////////
+			Ht = BH;
+			for (int i = 0; i < size; i ++) {
+				Ht += W.slice(data[i].movie).t() * Vt.col(i);
 			}
+			Ht = 1.0 / (1 + exp(-Ht));
+
+
+			 ///// way 2 //////
+
+			// for (int j = 0; j < F; j++) {
+			// 	Ht(j) = BH(j);
+
+			// 	for (int i = 0; i < size; i++) {
+			// 		record r = data[i];
+
+			// 		for (int k = 0; k < K; k++) {
+			// 			double w = W(k, j, r.movie);
+			// 			double v = Vt(k, i);
+
+			// 			Ht(j) += w * v;
+
+			// 		}
+			// 	}
+
+			// 	Ht(j) = sigma(Ht(j));
+			// }
+			
 
 
 
-
-
-			// set Vt -> 0
-			Vt = zeros<mat>(K, size);
 
 
 			// negative phase: H -> V
+			//TEST CODE
+			// Vt = exp(BV.cols(mIndices) + W.slices(mIndices) * Ht);
 			for (int i = 0; i < size; i++) {
 				record r = data[i];
 
-				for (int k = 0; k < K; k++) {
+				Vt.col(i) = exp(BV.col(r.movie) + W.slice(r.movie) * Ht);
 
-					double bv = BV(k, r.movie);
-					Vt(k, i) = bv;
+				// for (int k = 0; k < K; k++) {
 
-					for (int j = 0; j < F; j++) {
-						double h = Ht(j);
-						double w = W(k, j, r.movie);
+				// 	double bv = BV(k, r.movie);
+				// 	Vt(k, i) = bv;
 
-						Vt(k, i) += h * w;
-					}
+				// 	for (int j = 0; j < F; j++) {
+				// 		double h = Ht(j);
+				// 		double w = W(k, j, r.movie);
 
-					// TEST CODE
-					Vt(k, i) = exp(Vt(k, i));
-				}
+				// 		Vt(k, i) += h * w;
+				// 	}
+
+				// 	Vt(k, i) = exp(Vt(k, i));
+				// }
 			}
 
 			// TEST CODE
 			// Normalize Vt -> sum_k (Vt(k, i)) = 1
-			for (int i = 0; i < size; i++) {
-				double sum_k = 0.0;
+			Vt = normalise(Vt, 1);
+			/* way 2 */
+			// for (int i = 0; i < size; i++) {
+			// 	double sum_k = 0.0;
 
-				for (int k = 0; k < K; k++) 
-					sum_k += Vt(k, i);
+			// 	for (int k = 0; k < K; k++) 
+			// 		sum_k += Vt(k, i);
 
-				for (int k = 0; k < K; k++) 
-					Vt(k, i) /= sum_k;
-			}
+			// 	for (int k = 0; k < K; k++) 
+			// 		Vt(k, i) /= sum_k;
+			// }
+			
 
 		}
 
 		// update W
 		for (int i = 0; i < size; i++) {
 			record r = data[i];
-			for (int j = 0; j < F; j++) {
-				for (int k = 0; k < K; k++) {
 
-					W(k, j, r.movie) += lrate * (H0(j) * V0(k, i) - Ht(j) * Vt(k, i));
+			W.slice(r.movie) += lrate * (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
+			/* way 2 */
+			// for (int j = 0; j < F; j++) {
+			// 	for (int k = 0; k < K; k++) {
 
-				}
-			}
+			// 		W(k, j, r.movie) += lrate * (H0(j) * V0(k, i) - Ht(j) * Vt(k, i));
+
+			// 	}
+			// }
 		}
 
 		// update BH
-		for (int j = 0; j < F; j++) {
-			BH(j) += lrate * (H0(j) - Ht(j));
-		}
+
+		BH += lrate * (H0 - Ht);
+		/* way 2 */
+		// for (int j = 0; j < F; j++) {
+		// 	BH(j) += lrate * (H0(j) - Ht(j));
+		// }
 
 		// update BV
 		for (int i = 0; i < size; i++) {
 			record r = data[i];
-			for (int k = 0; k < K; k++) {
-				BV(k, r.movie) += lrate * (V0(k, i) - Vt(k, i));
-			}
+
+			BV.col(r.movie) += lrate * (V0.col(i) - Vt.col(i));
+			/* way 2 */
+			// for (int k = 0; k < K; k++) {
+			// 	BV(k, r.movie) += lrate * (V0(k, i) - Vt(k, i));
+			// }
 		}
 
 	}
@@ -441,7 +487,7 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 
 
-	unsigned int iter_num = 3;
+	unsigned int iter_num = 40;
 	rbm.fit(train_data, iter_num);
 
 	vector<float>results = rbm.predict_list(test_data);
