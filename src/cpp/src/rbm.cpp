@@ -62,7 +62,7 @@ public:
 
 
 		CD_K = 1;
-		lrate = 0.01 / BATCH_SIZE;
+		lrate = 0.02 / BATCH_SIZE;
 
 
 	}
@@ -94,8 +94,8 @@ public:
 
 
 			// TEST CODE
-			// vector<float> results = predict_list(*ptr_test_data);
-			// cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
+			vector<float> results = predict_list(*ptr_test_data);
+			cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
 			
 			cout << "working on iteration " << iter_num << "..." << endl;
 
@@ -349,10 +349,10 @@ public:
 
 
 int main () {
-	string train_file_name = "../../data/mini_main.data";
-	string test_file_name = "../../data/mini_prob.data";
-	// string train_file_name = "../../data/main_data.data";
-	// string test_file_name = "../../data/prob_data.data";
+	// string train_file_name = "../../data/mini_main.data";
+	// string test_file_name = "../../data/mini_prob.data";
+	string train_file_name = "../../data/main_data.data";
+	string test_file_name = "../../data/prob_data.data";
 	
 	record_array train_data;
 	train_data.load(train_file_name.c_str());
@@ -370,7 +370,7 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 
 
-	unsigned int iter_num = 15;
+	unsigned int iter_num = 50;
 	rbm.fit(train_data, iter_num);
 
 	vector<float>results = rbm.predict_list(test_data);
