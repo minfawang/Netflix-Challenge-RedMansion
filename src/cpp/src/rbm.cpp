@@ -1,10 +1,18 @@
 #include <armadillo>
 #include <iostream>
+#include <omp.h>
+
 #include "types.hpp"
 
 
 #ifndef __RBM_ESTIMATORS
 #define __RBM_ESTIMATORS
+
+
+#define NUM_THREADS 8
+#define BATCH_SIZE (NUM_THREADS * 20)
+
+
 
 using namespace arma;
 
@@ -43,9 +51,9 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 60;
-		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
-		N = 458293 / 10;
+		F = 100;
+		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
+		N = 458293 / 1;
 
 		W = randu<cube>(K, F, M) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
@@ -53,8 +61,8 @@ public:
 		// BH = randu<mat>(K, F) / 8.0;
 
 
-		CD_K = 5;
-		lrate = 0.0003;
+		CD_K = 1;
+		lrate = 0.01 / BATCH_SIZE;
 
 
 	}
@@ -73,9 +81,21 @@ public:
 
 		// training stage
 		for (int iter_num = 0; iter_num < n_iter; iter_num++) {
+			// customize CD_K based on the number of iteration
+			if (iter_num < 15)
+				CD_K = 1;
+			else if (iter_num < 25)
+				CD_K = 3;
+			else if (iter_num < 35)
+				CD_K = 5;
+			else
+				CD_K = 9;
+			
+
+
 			// TEST CODE
-			vector<float> results = predict_list(*ptr_test_data);
-			cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
+			// vector<float> results = predict_list(*ptr_test_data);
+			// cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
 			
 			cout << "working on iteration " << iter_num << "..." << endl;
 
@@ -83,18 +103,33 @@ public:
 			unsigned int start = 0;
 			unsigned int end = 0;
 
+
+
+			int starts[BATCH_SIZE];
+			int ends[BATCH_SIZE];
+			int users[BATCH_SIZE];
+			int thread_id = 0;
+			starts[0] = 0;
+
 			for (int i = 0; i < train_data.size; i++) {
 				record r = train_data.data[i];
 				if ((user_id != r.user) || i == train_data.size-1) {
-					end = (i == train_data.size-1) ? (i + 1) : i;
-					train((train_data.data+start), user_id, end - start);
+					ends[thread_id] = (i == train_data.size-1) ? (i + 1) : i;
+					users[thread_id] = user_id;
 
 					user_id = r.user;
-					start = i;
+					thread_id++;
+					if (thread_id == (BATCH_SIZE) || i == train_data.size-1) {
+#pragma omp parallel for num_threads(NUM_THREADS)
+						for (int t = 0; t < thread_id; t++) {
+							train(train_data.data+starts[t], users[t], ends[t]-starts[t], CD_K);
+						}
+
+						thread_id = 0;
+					}
+					starts[thread_id] = i;
 				}
 			}
-
-
 
 
 			// store predicted data to file
@@ -243,7 +278,7 @@ public:
 
 
 
-	void train(const record *data, unsigned int user_id, unsigned int size) {
+	void train(const record *data, unsigned int user_id, unsigned int size, int CD_K) {
 		// initialization
 		mat V0 = zeros<mat>(K, size);
 		mat Vt = zeros<mat>(K, size);
@@ -335,7 +370,7 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 
 
-	unsigned int iter_num = 40;
+	unsigned int iter_num = 15;
 	rbm.fit(train_data, iter_num);
 
 	vector<float>results = rbm.predict_list(test_data);
