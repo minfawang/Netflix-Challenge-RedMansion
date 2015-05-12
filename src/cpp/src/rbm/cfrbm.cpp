@@ -35,6 +35,7 @@ public:
 	mat B;
 	mat BV; // K * M
 	vec BH; // F
+	mat D;
 	// mat BH; // K * F
 
 	unsigned int C;
@@ -55,15 +56,17 @@ public:
 	basic_rbm() {
 		K = 5;
 		F = 100;
-		C = 30;
 		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 10;
+		C = 30;
 
 		W = randu<cube>(K, F, M) / 8.0;
-		A = randu<cube>(K, C, M) / 8.0;
-		B = randu<mat>(C, F) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
 		BH = randu<vec>(F) / 8.0;
+
+		A = randu<cube>(K, C, M) / 8.0;
+		B = randu<mat>(C, F) / 8.0;
+		D = randu<mat>(F, M) / 8.0;
 
 
 		CD_K = 1;
@@ -319,7 +322,7 @@ public:
 
 		H0 = BH;
 		for (int i = 0; i < size; i++) {
-			H0 += W.slice(ims[i]).t() * V0.col(i);
+			H0 += W_user.slice(i).t() * V0.col(i);
 		}
 		H0 = 1.0 / (1 + exp(-H0));
 		

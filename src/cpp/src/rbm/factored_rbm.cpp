@@ -319,7 +319,7 @@ public:
 
 		H0 = BH;
 		for (int i = 0; i < size; i++) {
-			H0 += W.slice(ims[i]).t() * V0.col(i);
+			H0 += W_user.slice(i).t() * V0.col(i);
 		}
 		H0 = 1.0 / (1 + exp(-H0));
 		
