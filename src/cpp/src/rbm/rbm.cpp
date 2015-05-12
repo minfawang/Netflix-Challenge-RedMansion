@@ -2,7 +2,7 @@
 #include <iostream>
 #include <omp.h>
 
-#include "types.hpp"
+#include "../types.hpp"
 
 
 #ifndef __RBM_ESTIMATORS
