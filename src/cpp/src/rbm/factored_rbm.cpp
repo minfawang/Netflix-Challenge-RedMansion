@@ -26,6 +26,10 @@ double sigma(double num) {
 	return 1.0 / (1 + exp(-num));
 }
 
+bool file_exists(const char *fileName) {
+	struct stat fileInfo;
+	return stat(fileName, &fileInfo) == 0;
+}
 
 class basic_rbm : public estimator_base {
 public:
@@ -48,6 +52,7 @@ public:
 
 	record_array *ptr_test_data;
 	record_array *ptr_train_data;
+	record_array *ptr_qual_data;
 
 
 
@@ -56,10 +61,9 @@ public:
 		K = 5;
 		F = 100;
 		C = 30;
-		M = 17770 / 10 + 1; // TODO: change M to be total number of movies
-		N = 458293 / 10;
+		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
+		N = 458293 / 1;
 
-		W = randu<cube>(K, F, M) / 8.0;
 		A = randu<cube>(K, C, M) / 8.0;
 		B = randu<mat>(C, F) / 8.0;
 		BV = randu<mat>(K, M) / 8.0;
@@ -67,7 +71,7 @@ public:
 
 
 		CD_K = 1;
-		lrate = 0.05 / BATCH_SIZE;
+		lrate = 0.04 / BATCH_SIZE;
 
 
 	}
@@ -99,8 +103,17 @@ public:
 
 
 			// TEST CODE
+			cout << "predicting ... " << endl;
 			vector<float> results = predict_list(*ptr_test_data);
-			cout << "RMSE: " << RMSE(*ptr_test_data, results) << endl;
+			float prob_rmse = RMSE(*ptr_test_data, results);
+			cout << "RMSE: " << prob_rmse << endl;
+			if (prob_rmse < 1.0) {
+				predict_qual_results_to_file(*ptr_qual_data, prob_rmse, iter_num);
+			}
+
+
+
+
 			
 			cout << "working on iteration " << iter_num << "..." << endl;
 
@@ -132,11 +145,6 @@ public:
 							train(train_data.data+starts[t], users[t], ends[t]-starts[t], CD_K);
 						}
 
-						// update W
-#pragma omp parallel for num_threads(NUM_THREADS)
-						for (int iw = 0; iw < M; iw++) {
-							W.slice(iw) = A.slice(iw) * B;
-						}
 
 						thread_id = 0;
 					}
@@ -145,38 +153,117 @@ public:
 			}
 
 
-			// store predicted data to file
-			ofstream out_file;
-		    out_file.open("test_coeff.txt");
+			// // store predicted data to file
+			// ofstream out_file;
+		 //    out_file.open("test_coeff.txt");
 
-		    // store W to file
-		    for (int i = 0; i < M; i++) {
-		    	for (int j = 0; j < F; j++) {
-		    		out_file << W(0, j, i) << " ";
-		    	}
-		    	out_file << endl;
-		    }
+		 //    // store W to file
+		 //    for (int i = 0; i < M; i++) {
+		 //    	for (int j = 0; j < F; j++) {
+		 //    		out_file << W(0, j, i) << " ";
+		 //    	}
+		 //    	out_file << endl;
+		 //    }
 
-		    // store BV to file
-		    for (int i = 0; i < M; i++) {
-		    	for (int k = 0; k < K; k++) {
-		    		out_file << BV(k, i) << " ";
-		    	}
-		    	out_file << endl;
-		    }
+		 //    // store BV to file
+		 //    for (int i = 0; i < M; i++) {
+		 //    	for (int k = 0; k < K; k++) {
+		 //    		out_file << BV(k, i) << " ";
+		 //    	}
+		 //    	out_file << endl;
+		 //    }
 		    
-		    // store BH to file
-		    for (int j = 0; j < F; j++) {
-		    	out_file << BH(j) << endl;
-		    }
+		 //    // store BH to file
+		 //    for (int j = 0; j < F; j++) {
+		 //    	out_file << BH(j) << endl;
+		 //    }
 		    
-		    out_file.close();
+		 //    out_file.close();
 		}
 
 
 		cout << "finish training!" << endl;
 		cout << "train data size: " << ptr_train_data->size << endl;
 		cout << "test data size: " << ptr_test_data->size << endl;
+
+
+	}
+
+
+	void train(const record *data, unsigned int user_id, unsigned int size, int CD_K) {
+		// initialization
+		mat V0 = zeros<mat>(K, size);
+		mat Vt = zeros<mat>(K, size);
+		vec H0 = zeros<vec>(F);
+		vec Ht = zeros<vec>(F);
+
+		vector<int> ims(size);
+		cube W_user(K, F, size);
+
+
+
+		// set up V0 and Vt based on the input data.
+		for (int i = 0; i < size; i++) {
+			record r = data[i];
+			V0(int(r.score)-1, i) = 1; // score - 1 is the index
+			Vt(int(r.score)-1, i) = 1;
+
+			ims[i] = r.movie;
+			W_user.slice(i) = A.slice(r.movie) * B;
+		}
+
+		/*
+		/////////////////// set up H0 by V -> H //////////////////
+		H0(j) = sigma( BH(j) + sum_ik ( W(k, j, r.movie) * V0(k, i) ))
+		*/
+
+		H0 = BH;
+		for (int i = 0; i < size; i++) {
+			H0 += W_user.slice(i).t() * V0.col(i);
+		}
+		H0 = 1.0 / (1 + exp(-H0));
+		
+
+
+		/////////////////// Do the contrastive divergence ///////////////////
+		for (int n = 0; n < CD_K; n++) {
+
+			////////////// positive phase: V -> H /////////
+			Ht = BH;
+			for (int i = 0; i < size; i ++) {
+				// Ht += W.slice(ims[i]).t() * Vt.col(i);
+				Ht += W_user.slice(i).t() * Vt.col(i);
+			}
+			Ht = 1.0 / (1 + exp(-Ht));
+			
+
+			// negative phase: H -> V
+			for (int i = 0; i < size; i++) {
+				// Vt.col(i) = exp(BV.col(ims[i]) + W.slice(ims[i]) * Ht);
+				Vt.col(i) = exp(BV.col(ims[i]) + W_user.slice(i) * Ht);
+			}
+
+			// Normalize Vt -> sum_k (Vt(k, i)) = 1
+			Vt = normalise(Vt, 1);
+
+		}
+
+
+		// update BH
+		BH += lrate * (H0 - Ht);
+
+
+
+		// update B
+		// update BV
+		// update A
+		mat B_old = B;
+		for (int i = 0; i < size; i++) {
+			mat HV_diff = (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
+			BV.col(ims[i]) += lrate * (V0.col(i) - Vt.col(i));
+			B += lrate * A.slice(ims[i]).t() * HV_diff;
+			A.slice(ims[i]) += lrate * HV_diff * B_old.t();
+		}
 
 
 	}
@@ -193,7 +280,7 @@ public:
 		unsigned int test_start = 0;
 		unsigned int test_end = 0;
 		unsigned int train_user = ptr_train_data->data[0].user;
-		unsigned int test_user = ptr_test_data->data[0].user;
+		unsigned int test_user = rcd_array.data[0].user;
 
 		vec Hu = zeros<vec>(F);
 		vec Vum(K);
@@ -204,14 +291,14 @@ public:
 
 
 
-		for (int i = 0; i < ptr_test_data->size; i++) {
+		for (int i = 0; i < rcd_array.size; i++) {
 
-			record r_test = ptr_test_data->data[i];
+			record r_test = rcd_array.data[i];
 
-			if ((test_user != r_test.user) || i == ptr_test_data->size -1) {
+			if ((test_user != r_test.user) || i == rcd_array.size -1) {
 				
 				// make prediction of test_user for movies in the test set
-				test_end = (i == ptr_test_data->size-1) ? (i + 1) : i;
+				test_end = (i == rcd_array.size-1) ? (i + 1) : i;
 				
 				int u_size = test_end - test_start;
 
@@ -243,7 +330,11 @@ public:
 							record r_train = ptr_train_data->data[u];
 							unsigned int k = int(r_train.score) - 1;
 							
-							double w = W(k, f, r_train.movie);
+							// double w = W(k, f, r_train.movie);
+							double w  = 0;
+							for (int c = 0; c < C; c++) {
+								w += A(k, c, r_train.movie) * B(c, f);	
+							}
 							Hu(f) += w;
 						}
 					}
@@ -252,8 +343,9 @@ public:
 
 					// negative phase to predict score
 					for (int u = test_start; u < test_end; u++) {
-						record r_test = ptr_test_data->data[u];
-						Vum = normalise( exp(BV.col(r_test.movie) + W.slice(r_test.movie) * Hu), 1);
+						record r_test = rcd_array.data[u];
+						// Vum = normalise( exp(BV.col(r_test.movie) + W.slice(r_test.movie) * Hu), 1);
+						Vum = normalise( exp(BV.col(r_test.movie) + A.slice(r_test.movie) * B * Hu), 1);
 						results[u] = dot(Vum, scores);
 					}
 
@@ -289,131 +381,81 @@ public:
 
 
 
+	void predict_qual_results_to_file(const record_array &qual_data, const float prob_rmse, unsigned int iter_num) {
+		cout << "predicting qual data ..." << endl;
+		vector<float>results = this->predict_list(qual_data);
+		// store results
+		string out_dir = "frbm_results/";
+		string rbm_out_name_pre;
+		ostringstream convert;
+		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		rbm_out_name_pre = out_dir + convert.str();
+		string rbm_out_name = rbm_out_name_pre;
 
-	void train(const record *data, unsigned int user_id, unsigned int size, int CD_K) {
-		// initialization
-		mat V0 = zeros<mat>(K, size);
-		mat Vt = zeros<mat>(K, size);
-		vec H0 = zeros<vec>(F);
-		vec Ht = zeros<vec>(F);
-
-		vector<int> ims(size);
-		cube W_user(K, F, size);
-
-
-
-		// set up V0 and Vt based on the input data.
-		for (int i = 0; i < size; i++) {
-			record r = data[i];
-			V0(int(r.score)-1, i) = 1; // score - 1 is the index
-			Vt(int(r.score)-1, i) = 1;
-
-			ims[i] = r.movie;
-			W_user.slice(i) = A.slice(r.movie) * B;
+		for (int file_idx = 1; file_exists(rbm_out_name.c_str()); file_idx++) {
+			rbm_out_name = rbm_out_name_pre + "_idx" + to_string(file_idx);
 		}
 
-		/*
-		/////////////////// set up H0 by V -> H //////////////////
-		H0(j) = sigma( BH(j) + sum_ik ( W(k, j, r.movie) * V0(k, i) ))
-		*/
+		cout << "write to file: " << rbm_out_name << endl;
 
-		H0 = BH;
-		for (int i = 0; i < size; i++) {
-			H0 += W.slice(ims[i]).t() * V0.col(i);
+		ofstream rbm_out_file;
+		rbm_out_file.open(rbm_out_name);
+		for (int i = 0; i < qual_data.size; i++) {
+			rbm_out_file << results[i] << endl;
 		}
-		H0 = 1.0 / (1 + exp(-H0));
-		
-
-
-		/////////////////// Do the contrastive divergence ///////////////////
-		for (int n = 0; n < CD_K; n++) {
-
-			////////////// positive phase: V -> H /////////
-			Ht = BH;
-			for (int i = 0; i < size; i ++) {
-				// Ht += W.slice(ims[i]).t() * Vt.col(i);
-				Ht += W_user.slice(i).t() * Vt.col(i);
-			}
-			Ht = 1.0 / (1 + exp(-Ht));
-			
-
-			// negative phase: H -> V
-			for (int i = 0; i < size; i++) {
-				// Vt.col(i) = exp(BV.col(ims[i]) + W.slice(ims[i]) * Ht);
-				Vt.col(i) = exp(BV.col(ims[i]) + W_user.slice(i) * Ht);
-			}
-
-			// Normalize Vt -> sum_k (Vt(k, i)) = 1
-			Vt = normalise(Vt, 1);
-
-		}
-
-		// // update W
-		// for (int i = 0; i < size; i++) {
-		// 	W.slice(data[i].movie) += lrate * (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
-		// }
-
-
-
-		// update BH
-		BH += lrate * (H0 - Ht);
-
-
-
-		// update B
-		// update BV
-		// update A
-		mat B_old = B;
-		for (int i = 0; i < size; i++) {
-			mat HV_diff = (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
-			BV.col(ims[i]) += lrate * (V0.col(i) - Vt.col(i));
-			B += lrate * A.slice(ims[i]).t() * HV_diff;
-			A.slice(ims[i]) += lrate * HV_diff * B_old.t();
-		}
-
-
+		rbm_out_file.close();
 	}
-
 
 };
 
 
+
+
+
 int main () {
+
+
+	unsigned int ITER_NUM = 1;
+	
+
 	string train_file_name = "../../../data/mini_main.data";
 	string test_file_name = "../../../data/mini_prob.data";
+	string qual_file_name = "../../../data/mini_prob.data"; // TODO: Change this name!!!
 	// string train_file_name = "../../../data/main_data.data";
 	// string test_file_name = "../../../data/prob_data.data";
+	// string qual_file_name = "../../../data/qual_data.data";
 	
 	record_array train_data;
+	record_array test_data;
+	record_array qual_data;
 	train_data.load(train_file_name.c_str());
 	cout << "finish loading " << train_file_name << endl;
+	test_data.load(test_file_name.c_str());
+	cout << "finish loading " << test_file_name << endl;
+	qual_data.load(qual_file_name.c_str());
+	cout << "finish loading " << qual_file_name << endl;
 
 
 	basic_rbm rbm;
-
 	rbm.ptr_train_data = &train_data;
-
-
-	record_array test_data;
-	test_data.load(test_file_name.c_str());
-	cout << "finish loading " << test_file_name << endl;
 	rbm.ptr_test_data = &test_data;
+	rbm.ptr_qual_data = &qual_data;
 
 
-	unsigned int iter_num = 20;
-	rbm.fit(train_data, iter_num);
+	rbm.fit(train_data, ITER_NUM);
 
 	vector<float>results = rbm.predict_list(test_data);
-	cout << "RMSE: " << RMSE(test_data, results) << endl;
+	float prob_rmse = RMSE(test_data, results);
+	cout << "RMSE: " << prob_rmse << endl;
 
-
-	// store results
-	ofstream rbm_out_file;
-	rbm_out_file.open("test_rbm_out.txt");
-	for (int i = 0; i < test_data.size; i++) {
-		rbm_out_file << results[i] << endl;
+	if (prob_rmse < 1.5) {
+		rbm.predict_qual_results_to_file(qual_data, prob_rmse, ITER_NUM);
 	}
-	rbm_out_file.close();
+
+
+
+
+
 
 }
 
