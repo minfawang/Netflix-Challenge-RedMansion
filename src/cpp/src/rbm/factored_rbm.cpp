@@ -107,7 +107,7 @@ public:
 			vector<float> results = predict_list(*ptr_test_data);
 			float prob_rmse = RMSE(*ptr_test_data, results);
 			cout << "RMSE: " << prob_rmse << endl;
-			if (prob_rmse < 1.0) {
+			if (prob_rmse < 0.93) {
 				predict_qual_results_to_file(*ptr_qual_data, prob_rmse, iter_num);
 			}
 
@@ -415,15 +415,15 @@ public:
 int main () {
 
 
-	unsigned int ITER_NUM = 1;
+	unsigned int ITER_NUM = 30;
 	
 
-	string train_file_name = "../../../data/mini_main.data";
-	string test_file_name = "../../../data/mini_prob.data";
-	string qual_file_name = "../../../data/mini_prob.data"; // TODO: Change this name!!!
-	// string train_file_name = "../../../data/main_data.data";
-	// string test_file_name = "../../../data/prob_data.data";
-	// string qual_file_name = "../../../data/qual_data.data";
+	// string train_file_name = "../../../data/mini_main.data";
+	// string test_file_name = "../../../data/mini_prob.data";
+	// string qual_file_name = "../../../data/mini_prob.data"; // TODO: Change this name!!!
+	string train_file_name = "../../../data/main_data.data";
+	string test_file_name = "../../../data/prob_data.data";
+	string qual_file_name = "../../../data/qual_data.data";
 	
 	record_array train_data;
 	record_array test_data;
@@ -448,7 +448,7 @@ int main () {
 	float prob_rmse = RMSE(test_data, results);
 	cout << "RMSE: " << prob_rmse << endl;
 
-	if (prob_rmse < 1.5) {
+	if (prob_rmse < 0.93) {
 		rbm.predict_qual_results_to_file(qual_data, prob_rmse, ITER_NUM);
 	}
 
