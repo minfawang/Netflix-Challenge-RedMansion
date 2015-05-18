@@ -15,16 +15,18 @@ int main(int argc, char * argv[]) {
 	float V_lambda = 0.00008;
 	float Y_lambda = 0.00008;
 	float lambda = 0.0001;
+    char *output_name = "output\\output.txt";
 
-	if (argc == 9) {
-		n_iter = atoi(argv[1]);
-		learning_rate = atof(argv[2]);
+	if (argc == 10) {
+        output_name = argv[1];
+		n_iter = atoi(argv[2]);		
 		lambda_factor = atof(argv[3]);
-		U0_lambda = atof(argv[4]);
-		U1_lambda = atof(argv[5]);
-		V_lambda = atof(argv[6]);
-		Y_lambda = atof(argv[7]);
-		lambda = atof(argv[8]);
+        learning_rate = atof(argv[4]);
+		U0_lambda = atof(argv[5]);
+		U1_lambda = atof(argv[6]);
+		V_lambda = atof(argv[7]);
+		Y_lambda = atof(argv[8]);
+		lambda = atof(argv[9]);
 	}
 
 	record_array main, prob, qual;
@@ -62,7 +64,7 @@ int main(int argc, char * argv[]) {
 	est.ptr_test_data = &prob;
 
 #if !_USE_MINI_SET
-	est.ptr_qual_data = &qual;
+	// est.ptr_qual_data = &qual;
 #endif
 
 	cout << "Start to fit" << endl;
@@ -84,7 +86,7 @@ int main(int argc, char * argv[]) {
 
 	cout << "Writting output file" << endl;
 
-	ofstream output_file("output\\output.txt");
+	ofstream output_file(output_name);
 
 	if (!output_file.is_open()) {
 		cerr << "Fail to open output file" << endl;
@@ -118,5 +120,7 @@ int main(int argc, char * argv[]) {
 	cout << result.size() << endl;
 	cout << toc_time - tic_time << "ms" << endl;
 
-	system("pause");
+    ofstream stat("stat.txt");
+    stat << RMSE(prob, result) << endl;
+	//system("pause");
 }
