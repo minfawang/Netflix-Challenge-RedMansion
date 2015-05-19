@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 200;
+	unsigned int n_iter = 40;
 	float learning_rate = 0.008;
 	float lambda_factor = 1000000;
 	float U0_lambda = 0.00008;
@@ -16,17 +16,18 @@ int main(int argc, char * argv[]) {
 	float Y_lambda = 0.00008;
 	float lambda = 0.0001;
     char *output_name = "output\\output.txt";
-
-	if (argc == 10) {
+    char *probe_output_name = "probe_output\\output.txt";
+	if (argc == 11) {
         output_name = argv[1];
-		n_iter = atoi(argv[2]);		
-		lambda_factor = atof(argv[3]);
-        learning_rate = atof(argv[4]);
-		U0_lambda = atof(argv[5]);
-		U1_lambda = atof(argv[6]);
-		V_lambda = atof(argv[7]);
-		Y_lambda = atof(argv[8]);
-		lambda = atof(argv[9]);
+        probe_output_name = argv[2];
+		n_iter = atoi(argv[3]);		
+		lambda_factor = atof(argv[4]);
+        learning_rate = atof(argv[5]);
+		U0_lambda = atof(argv[6]);
+		U1_lambda = atof(argv[7]);
+		V_lambda = atof(argv[8]);
+		Y_lambda = atof(argv[9]);
+		lambda = atof(argv[10]);
 	}
 
 	record_array main, prob, qual;
@@ -39,7 +40,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 0
+#define _USE_MINI_SET 1
 #define _TEST_SAVE_AND_LOAD 0
 
 
@@ -81,6 +82,11 @@ int main(int argc, char * argv[]) {
 
     ofstream stat("stat.txt");
     stat << RMSE(prob, result) << endl;
+
+    ofstream probe_output_file(probe_output_name);
+    for (int i = 0; i < result.size(); i++) {
+        probe_output_file << result[i] << endl;
+    }
 #if !_USE_MINI_SET
 	cout << "Qual set" << endl;
 
