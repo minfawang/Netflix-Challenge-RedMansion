@@ -10,7 +10,7 @@ const int MAX_DATE = 2243;
 const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
-#define _TEST_NAN
+//#define _TEST_NAN
 #define _USE_Y 0
 
 #ifndef __MF_ESTIMATORS
@@ -66,8 +66,8 @@ double eval_function(const mat &function_table, int t) {
 	return function_table[t + MAX_DATE];
 }
 
-vec eval_functions(const mat &function_table, int t) {
-	return function_table.unsafe_col(t + MAX_DATE);
+double* eval_functions(mat &function_table, int t) {
+	return function_table.colptr(t + MAX_DATE);
 }
 
 unsigned int get_timebin(const unsigned int date, const unsigned int D) {
@@ -152,6 +152,7 @@ public:
 
 		initialized = false;
 		ptr_test_data = NULL;
+        ptr_qual_data = NULL;
 
 		lambda_factor = 1;
 		U0_lambda = 0.0001;
@@ -222,15 +223,15 @@ public:
 	virtual float predict(const record & rcd) {
 		unsigned int i = rcd.user - 1, j = rcd.movie - 1, d = rcd.date;
 		unsigned int d_i = get_timebin(rcd.date, D_u), d_j = get_timebin(rcd.date, D_i);
-		vec A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
-		vec B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
+		double* A_func_val = eval_functions(A_function_table, d - date_origin_user[i]);
+		double* B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 		vec U_col(K);
 	    fang_add_mul_rtn(U_col, U0.colptr(i), U1.colptr(i), eval_function(U1_function_table, d - date_origin_user[i]), U0.n_rows);
 
 		double result = mu + dot(U_col, V.unsafe_col(j));
 
-		result += dot(A_func_val, A.col(i));
-		result += dot(B_func_val, B.col(j));
+		result += fang_mul(A_func_val, A.colptr(i), A.n_rows);
+		result += fang_mul(B_func_val, B.colptr(j), B.n_rows);
 
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
@@ -282,14 +283,14 @@ public:
 		double u = eval_function(U1_function_table, d - date_origin_user[i]);
 
 		vec &U_col = update_temp_var_thread[tid].U_col;
-		vec &A_func_val = update_temp_var_thread[tid].A_function_val;
-		vec &B_func_val = update_temp_var_thread[tid].B_function_val;
+		double *A_func_val;
+		double *B_func_val;
 		vec &Yi = update_temp_var_thread[tid].Yi;
 
 		fang_add_mul_rtn(U_col, U0i, U1i, u, U0.n_rows);
 
 		double *Vj = V.colptr(j);
-		double UiVj = dot(U_col, V.unsafe_col(j));
+		double UiVj = fang_mul(U_col.memptr(), V.colptr(j), K);
 
 		double data_mul = 1; // 0.2 * (2243 - rcd.date) / 2243 + 0.8;
 
@@ -297,8 +298,8 @@ public:
 		B_func_val = eval_functions(B_function_table, d - date_origin_movie[j]);
 
 		double result = mu + UiVj;
-		result += dot(A_func_val, A.unsafe_col(i));
-		result += dot(B_func_val, B.unsafe_col(j));
+		result += fang_mul(A_func_val, A.colptr(i), A.n_rows);
+		result += fang_mul(B_func_val, B.colptr(j), B.n_rows);
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
 
@@ -335,10 +336,10 @@ public:
 		fang_add_mul(Vj, U_col.memptr(), r_pFpX, K);
 
 		// A(:,i) = A(:,i) - rate * gAi; gAi = - pFpX;
-		fang_add_mul(A.colptr(i), A_func_val.memptr(), r_pFpX, A_func_val.n_rows);
+		fang_add_mul(A.colptr(i), A_func_val, r_pFpX, A.n_rows);
 
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
-		fang_add_mul(B.colptr(j), B_func_val.memptr(), r_pFpX, B_func_val.n_rows);
+		fang_add_mul(B.colptr(j), B_func_val, r_pFpX, B.n_rows);
 
 		A_timebin(d_i, i) += r_pFpX;
 		B_timebin(d_j, j) += r_pFpX;

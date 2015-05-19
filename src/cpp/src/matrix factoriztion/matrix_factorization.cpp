@@ -7,14 +7,33 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	unsigned int n_iter = 40;
-	float learning_rate = 0.008;
-	float lambda_factor = 1000000;
-	float U0_lambda = 0.00008;
-	float U1_lambda = 0.00008;
-	float V_lambda = 0.00008;
-	float Y_lambda = 0.00008;
-	float lambda = 0.0001;
+	//unsigned int n_iter = 40;
+	//float learning_rate = 0.008;
+	//float lambda_factor = 1000000;
+	//float U0_lambda = 0.00008;
+	//float U1_lambda = 0.00008;
+	//float V_lambda = 0.00008;
+	//float Y_lambda = 0.00008;
+	//float lambda = 0.0001;
+
+    //unsigned int n_iter = 40;
+    //float learning_rate = 0.00657120207082;
+    //float lambda_factor = 1162151.32362;
+    //float U0_lambda = 5.32490187658e-05;
+    //float U1_lambda = 0.000198800471752;
+    //float V_lambda = 9.82648148159e-05;
+    //float Y_lambda = 0.00008;
+    //float lambda = 0.000108964962676;
+
+    unsigned int n_iter = 40;
+    float learning_rate = 0.00525696165666;
+    float lambda_factor = 929721.058896;
+    float U0_lambda = 3.328e-5;
+    float U1_lambda = 0.000388;
+    float V_lambda = 0.00012283;
+    float Y_lambda = 0.00012283;
+    float lambda = 0.0001362;
+
     char *output_name = "output\\output.txt";
     char *probe_output_name = "probe_output\\output.txt";
 	if (argc == 11) {
@@ -40,7 +59,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 1
+#define _USE_MINI_SET 0
 #define _TEST_SAVE_AND_LOAD 0
 
 
@@ -65,6 +84,7 @@ int main(int argc, char * argv[]) {
 	est.ptr_test_data = &prob;
 
 #if !_USE_MINI_SET
+    
 	// est.ptr_qual_data = &qual;
 #endif
 
@@ -80,8 +100,14 @@ int main(int argc, char * argv[]) {
 
 	cout << "RMSE: " << RMSE(prob, result) << endl;
 
+    float rmse = RMSE(prob, result);
     ofstream stat("stat.txt");
-    stat << RMSE(prob, result) << endl;
+    if (isnan(rmse)){
+        stat << 10.0 << endl;
+    } else{
+        stat << RMSE(prob, result) << endl;
+    }
+    
 
     ofstream probe_output_file(probe_output_name);
     for (int i = 0; i < result.size(); i++) {
