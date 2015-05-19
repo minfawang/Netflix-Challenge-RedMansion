@@ -39,7 +39,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 1
+#define _USE_MINI_SET 0
 #define _TEST_SAVE_AND_LOAD 0
 
 
@@ -79,6 +79,8 @@ int main(int argc, char * argv[]) {
 
 	cout << "RMSE: " << RMSE(prob, result) << endl;
 
+    ofstream stat("stat.txt");
+    stat << RMSE(prob, result) << endl;
 #if !_USE_MINI_SET
 	cout << "Qual set" << endl;
 
@@ -120,7 +122,6 @@ int main(int argc, char * argv[]) {
 	cout << result.size() << endl;
 	cout << toc_time - tic_time << "ms" << endl;
 
-    ofstream stat("stat.txt");
-    stat << RMSE(prob, result) << endl;
+
 	//system("pause");
 }

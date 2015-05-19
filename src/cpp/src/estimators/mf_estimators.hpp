@@ -487,7 +487,7 @@ public:
 
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool continue_fit = false) {
 		try {
-			unsigned int batch_size = 1000;
+			unsigned int batch_size = 10000;
 			unsigned int block_size = train_data.size / batch_size / 16;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
