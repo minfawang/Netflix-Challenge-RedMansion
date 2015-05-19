@@ -11,7 +11,7 @@ const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
 //#define _TEST_NAN
-#define _USE_Y 0
+#define _USE_Y 1
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS

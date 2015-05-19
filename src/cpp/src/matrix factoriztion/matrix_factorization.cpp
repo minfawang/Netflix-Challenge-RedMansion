@@ -28,10 +28,10 @@ int main(int argc, char * argv[]) {
     unsigned int n_iter = 40;
     float learning_rate = 0.015;
     float lambda_factor = 10000;
-    float U0_lambda = 0.0002;
-    float U1_lambda = 0.0004;
+    float U0_lambda = 0.0004;
+    float U1_lambda = 0.0001;
     float V_lambda = 0.0012;
-    float Y_lambda = 0.0008;
+    float Y_lambda = 0.0004;
     float lambda = 0.0004;
 
     char *output_name = "output\\output.txt";
