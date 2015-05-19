@@ -146,7 +146,7 @@ public:
 
 
 	gamma_mf() {
-		K = 20;
+		K = 100;
 		D_u = 20;
 		D_i = 20;
 
@@ -449,7 +449,7 @@ public:
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
 		B_lambda_raw.push_back(lambda);
 
-		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7, 2.0 * MAX_DATE / 90, 0.25, 1, 4};
+        vector<double> w_list = {2.0 * MAX_DATE / 180, 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7, 2.0 * MAX_DATE / 90, 0.25, 1, 4 };
 		for (int i = 0; i < w_list.size(); i++) {
 			double w = w_list[i];
 			A_function_table.insert_rows(A_function_table.n_rows, ftg.sinw_table(i));
@@ -572,6 +572,37 @@ public:
 					if (i % block_size == 0) {
 						cout << '.';
 					}
+
+                    if (i % (train_data.size / batch_size / 32) == 0) {
+                        vec A_shrink(A.n_rows);
+                        vec B_shrink(B.n_rows);
+
+                        double regu_pwr = lambda_factor;
+                        // Recalculate all the shrinks
+                        for (unsigned int i = 0; i < A.n_rows; i++) {
+                            A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, regu_pwr);
+                        }
+
+                        for (unsigned int i = 0; i < B.n_rows; i++) {
+                            B_shrink[i] = pow(1 - B_lambda[i] * learning_rate_per_record, regu_pwr);
+                        }
+
+                        // Regularization
+
+                        U0 *= pow(1 - U0_lambda * learning_rate_per_record, regu_pwr);
+                        U1 *= pow(1 - U1_lambda * learning_rate_per_record, regu_pwr);
+                        V *= pow(1 - V_lambda * learning_rate_per_record, regu_pwr);
+                        Y *= pow(1 - Y_lambda * learning_rate_per_record, regu_pwr);
+                        A_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
+                        B_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
+
+                        for (unsigned int j = 0; j < A.n_cols; j++) {
+                            A.col(j) %= A_shrink; // Element wise multiplication
+                        }
+                        for (unsigned int j = 0; j < B.n_cols; j++) {
+                            B.col(j) %= B_shrink; // Element wise multiplication
+                        }
+                    }
 				}
 				if (ptr_test_data != NULL) {
 					vector<float> result = this->predict_list(*ptr_test_data);
@@ -615,34 +646,7 @@ public:
 				}
 
 				if (i_iter != n_iter - 1) {
-					vec A_shrink(A.n_rows);
-					vec B_shrink(B.n_rows);
 
-					double regu_pwr = lambda_factor;
-					// Recalculate all the shrinks
-					for (unsigned int i = 0; i < A.n_rows; i++) {
-						A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, regu_pwr);
-					}
-
-					for (unsigned int i = 0; i < B.n_rows; i++) {
-						B_shrink[i] = pow(1 - B_lambda[i] * learning_rate_per_record, regu_pwr);
-					}
-
-					// Regularization
-					
-					U0 *= pow(1 - U0_lambda * learning_rate_per_record, regu_pwr);
-					U1 *= pow(1 - U1_lambda * learning_rate_per_record, regu_pwr);
-					V *= pow(1 - V_lambda * learning_rate_per_record, regu_pwr);
-					Y *= pow(1 - Y_lambda * learning_rate_per_record, regu_pwr);
-					A_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
-					B_timebin *= pow(1 - lambda * learning_rate_per_record, regu_pwr);
-
-					for (unsigned int j = 0; j < A.n_cols; j++) {
-						A.col(j) %= A_shrink; // Element wise multiplication
-					}
-					for (unsigned int j = 0; j < B.n_cols; j++) {
-						B.col(j) %= B_shrink; // Element wise multiplication
-					}
 					
 					scale = scale * learning_rate_mul;
 					learning_rate_per_record = learning_rate * scale;

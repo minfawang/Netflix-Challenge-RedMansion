@@ -8,8 +8,8 @@ using namespace arma;
 int main(int argc, char * argv[]) {
 
 	unsigned int n_iter = 40;
-	float learning_rate = 0.008;
-	float lambda_factor = 1000000;
+	float learning_rate = 0.01;
+	float lambda_factor = 30000;
 	float U0_lambda = 0.00008;
 	float U1_lambda = 0.00008;
 	float V_lambda = 0.00008;
@@ -65,6 +65,7 @@ int main(int argc, char * argv[]) {
 	est.ptr_test_data = &prob;
 
 #if !_USE_MINI_SET
+    est.ptr_qual_data = NULL;
 	// est.ptr_qual_data = &qual;
 #endif
 
