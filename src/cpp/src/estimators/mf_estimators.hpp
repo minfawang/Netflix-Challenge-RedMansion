@@ -146,7 +146,7 @@ public:
 
 
 	gamma_mf() {
-		K = 100;
+		K = 20;
 		D_u = 20;
 		D_i = 20;
 
@@ -165,7 +165,7 @@ public:
 		// learning_rate = 0.002;
 		learning_rate = 0.0015;
 
-		learning_rate_mul = 0.9;
+		learning_rate_mul = 0.90;
 		learning_rate_min = 0;
 	}
 
@@ -488,7 +488,7 @@ public:
 
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool continue_fit = false) {
 		try {
-			unsigned int batch_size = 10000;
+			unsigned int batch_size = 1000;
 			unsigned int block_size = train_data.size / batch_size / 16;
 			unsigned int n_user = 0, n_movie = 0;
 			unsigned int *shuffle_idx;
@@ -554,11 +554,11 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-#pragma omp parallel for num_threads(N_THREADS)
+//#pragma omp parallel for num_threads(N_THREADS)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
 
-					reshuffle(shuffle_idx_batch[omp_get_thread_num()], batch_size);
+					//reshuffle(shuffle_idx_batch[omp_get_thread_num()], batch_size);
 
 					for (int j = 0; j < batch_size; j++) {
 						unsigned int index = index_base + shuffle_idx_batch[omp_get_thread_num()][j];
@@ -574,7 +574,7 @@ public:
 						cout << '.';
 					}
 
-                    if (i % (train_data.size / batch_size / 32) == 0) {
+                    if (i % (train_data.size / batch_size / 16) == 0) {
                         vec A_shrink(A.n_rows);
                         vec B_shrink(B.n_rows);
 

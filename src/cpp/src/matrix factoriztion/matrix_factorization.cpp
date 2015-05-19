@@ -26,13 +26,13 @@ int main(int argc, char * argv[]) {
     //float lambda = 0.000108964962676;
 
     unsigned int n_iter = 40;
-    float learning_rate = 0.00525696165666;
-    float lambda_factor = 929721.058896;
-    float U0_lambda = 3.328e-5;
-    float U1_lambda = 0.000388;
-    float V_lambda = 0.00012283;
-    float Y_lambda = 0.00012283;
-    float lambda = 0.0001362;
+    float learning_rate = 0.015;
+    float lambda_factor = 10000;
+    float U0_lambda = 0.0002;
+    float U1_lambda = 0.0004;
+    float V_lambda = 0.0012;
+    float Y_lambda = 0.0008;
+    float lambda = 0.0004;
 
     char *output_name = "output\\output.txt";
     char *probe_output_name = "probe_output\\output.txt";
@@ -59,7 +59,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 0
+#define _USE_MINI_SET 1
 #define _TEST_SAVE_AND_LOAD 0
 
 
