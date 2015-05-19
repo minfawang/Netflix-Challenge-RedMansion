@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <random>
+#include <set>
 #include "types.hpp"
 
 
@@ -53,16 +54,38 @@ void split_mini (string prefix) {
 		main_prob_idx[prob_idx[i]] = 1;
 	}
 
+	set<int> main_user_set;
 
 	mini_main.open(main_name, ios::binary | ios::out);
+	for (int i = 0; i < recMini.size; i++) {
+		if (!main_prob_idx[i]) {
+			record r = recMini.data[i];
+			mini_main.write((char*)&r, sizeof(r));
+
+			if (main_user_set.find(r.user) == main_user_set.end()) 
+				main_user_set.insert(r.user);
+		}
+	}
+
 	mini_prob.open(prob_name, ios::binary | ios::out);
 	for (int i = 0; i < recMini.size; i++) {
-		record r = recMini.data[i];
-		if (main_prob_idx[i])
-			mini_prob.write((char*)&r, sizeof(r));
-		else
-			mini_main.write((char*)&r, sizeof(r));
+		if (main_prob_idx[i]) {
+			record r = recMini.data[i];
+			if (main_user_set.find(r.user) != main_user_set.end())
+				mini_prob.write((char*)&r, sizeof(r));
+			else {
+				mini_main.write((char*)&r, sizeof(r));
+				main_user_set.insert(r.user);
+			}
+		}
 	}
+	// for (int i = 0; i < recMini.size; i++) {
+	// 	record r = recMini.data[i];
+	// 	if (main_prob_idx[i])
+	// 		mini_prob.write((char*)&r, sizeof(r));
+	// 	else
+	// 		mini_main.write((char*)&r, sizeof(r));
+	// }
 
 	mini_prob.close();
 	mini_main.close();
