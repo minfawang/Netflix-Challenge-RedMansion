@@ -7,29 +7,21 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	//unsigned int n_iter = 40;
-	//float learning_rate = 0.008;
-	//float lambda_factor = 1000000;
-	//float U0_lambda = 0.00008;
-	//float U1_lambda = 0.00008;
-	//float V_lambda = 0.00008;
-	//float Y_lambda = 0.00008;
-	//float lambda = 0.0001;
-
+    //good for mini
     //unsigned int n_iter = 40;
-    //float learning_rate = 0.00657120207082;
-    //float lambda_factor = 1162151.32362;
-    //float U0_lambda = 5.32490187658e-05;
-    //float U1_lambda = 0.000198800471752;
-    //float V_lambda = 9.82648148159e-05;
-    //float Y_lambda = 0.00008;
-    //float lambda = 0.000108964962676;
+    //float learning_rate = 0.015;
+    //float lambda_factor = 10000;
+    //float U0_lambda = 0.0004;
+    //float U1_lambda = 0.0001;
+    //float V_lambda = 0.0012;
+    //float Y_lambda = 0.0004;
+    //float lambda = 0.0004;
 
     unsigned int n_iter = 40;
     float learning_rate = 0.015;
     float lambda_factor = 10000;
     float U0_lambda = 0.0004;
-    float U1_lambda = 0.0001;
+    float U1_lambda = 0.0012;
     float V_lambda = 0.0012;
     float Y_lambda = 0.0004;
     float lambda = 0.0004;
@@ -59,7 +51,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 1
+#define _USE_MINI_SET 0
 #define _TEST_SAVE_AND_LOAD 0
 
 
