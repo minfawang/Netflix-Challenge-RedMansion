@@ -63,10 +63,10 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 50;
-		C = 10;
+		F = 150;
+		C = 30;
 		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
-		N = 458293 / 1;
+		N = 458293 / 1 + 1;
 
 		A = randu<cube>(K, C, M) / 8.0;
 		B = randu<mat>(C, F) / 8.0;
@@ -75,7 +75,7 @@ public:
 
 
 		CD_K = 1;
-		lrate = 0.04 / BATCH_SIZE;
+		lrate = 0.05 / BATCH_SIZE;
 
 
 	}
@@ -88,9 +88,46 @@ public:
 		return true;
 	}
 
+	void saveAllParameters(int iter_num) {
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		
+		A.save(outName_A, arma_binary);
+		B.save(outName_B, arma_binary);
+		BV.save(outName_BV, arma_binary);
+		BH.save(outName_BH, arma_binary);
+
+	}
+
+	void loadAllParameters(int iter_num) {
+
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		
+		A.load(outName_A, arma_binary);
+		B.load(outName_B, arma_binary);
+		BV.load(outName_BV, arma_binary);
+		BH.load(outName_BH, arma_binary);
+	}
+
 
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) {
 
+		// loadAllParameters();
 
 		// training stage
 		for (int iter_num = 0; iter_num < n_iter; iter_num++) {
@@ -103,20 +140,19 @@ public:
 				CD_K = 5;
 			else
 				CD_K = 9;
-			
 
 
 			// TEST CODE
-
-			cout << "predicting ... " << endl;
-			vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map);
-			float prob_rmse = RMSE(*ptr_test_data, results);
-			cout << "RMSE: " << prob_rmse << endl;
-			// if (prob_rmse < 0.93) {
-			// 	predict_qual_results_to_file(*ptr_qual_data, prob_rmse, iter_num);
-			// }
-
-
+			if (iter_num >= 10) {
+				cout << "predicting ... " << endl;
+				vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map);
+				float prob_rmse = RMSE(*ptr_test_data, results);
+				cout << "RMSE: " << prob_rmse << endl;
+				if (prob_rmse < 0.93) {
+					write_prob_results_to_file(results, prob_rmse, iter_num);
+					predict_qual_results_to_file(prob_rmse, iter_num);
+				}
+			}
 
 
 			
@@ -125,7 +161,6 @@ public:
 			unsigned int user_id = train_data.data[0].user;
 			unsigned int start = 0;
 			unsigned int end = 0;
-
 
 
 			int starts[BATCH_SIZE];
@@ -155,6 +190,11 @@ public:
 					}
 					starts[thread_id] = i;
 				}
+			}
+
+			// TEST CODE
+			if (iter_num >= 10 && iter_num % 2 == 0) {
+				saveAllParameters(iter_num);
 			}
 
 
@@ -368,7 +408,8 @@ public:
 		vector<float>results = predict_array(*ptr_qual_data, *ptr_test_data, qual_map, test_map);
 
 		// store results
-		string out_dir = "frbm_results/";
+		// string out_dir = "frbm_results/";
+		string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/qual/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
@@ -392,7 +433,8 @@ public:
 	void write_prob_results_to_file(vector<float> results, const float prob_rmse, unsigned int iter_num) {
 
 		// store results
-		string out_dir = "frbm_results/";
+		// string out_dir = "frbm_results/";
+		string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/prob/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << "prob_" << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
@@ -403,15 +445,16 @@ public:
 			rbm_out_name = rbm_out_name_pre + "_idx" + to_string(file_idx);
 		}
 
-		cout << "write to file: " << rbm_out_name << endl;
+		cout << "write prob to file: " << rbm_out_name << endl;
 
 		ofstream rbm_out_file;
 		rbm_out_file.open(rbm_out_name);
-		for (int i = 0; i < ptr_qual_data->size; i++) {
+		for (int i = 0; i < ptr_test_data->size; i++) {
 			rbm_out_file << results[i] << endl;
 		}
 		rbm_out_file.close();
 	}
+
 };
 
 
@@ -453,15 +496,21 @@ unordered_map<unsigned int, int*> make_pre_map(const record_array &record_data) 
 int main () {
 
 
-	unsigned int ITER_NUM = 30;
+	unsigned int ITER_NUM = 40;
 	
 
 	// string train_file_name = "../../../data/mini_main.data";
 	// string test_file_name = "../../../data/mini_prob.data";
 	// string qual_file_name = "../../../data/mini_prob.data"; // TODO: Change this name!!!
+	
 	string train_file_name = "../../../data/main_data.data";
 	string test_file_name = "../../../data/prob_data.data";
 	string qual_file_name = "../../../data/qual_data.data";
+
+	// string train_file_name = "../../../data/mid_main.data";
+	// string test_file_name = "../../../data/mid_prob.data";
+	// string qual_file_name = "../../../data/mid_prob.data";
+
 	
 	record_array train_data;
 	record_array test_data;
@@ -487,7 +536,7 @@ int main () {
 
 	rbm.fit(train_data, ITER_NUM);
 
-	vector<float>results = rbm.predict_list(test_data);
+	vector<float>results = rbm.predict_array(test_data, qual_data, rbm.test_map, rbm.qual_map);;
 	float prob_rmse = RMSE(test_data, results);
 	cout << "RMSE: " << prob_rmse << endl;
 

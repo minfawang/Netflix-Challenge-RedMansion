@@ -64,7 +64,7 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 120;
+		F = 200;
 		C = 40;
 		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 1 + 1;
@@ -76,7 +76,7 @@ public:
 
 
 		CD_K = 1;
-		lrate = 0.04 / BATCH_SIZE;
+		lrate = 0.05 / BATCH_SIZE;
 
 		D = randu<mat>(F, M);
 
@@ -88,6 +88,47 @@ public:
 
 	virtual bool load(const char * file_name) {
 		return true;
+	}
+
+
+	void saveAllParameters(int iter_num) {
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "cond_starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		string outName_D = out_dir + prefix.str() + "_D.mat";
+		
+		A.save(outName_A, arma_binary);
+		B.save(outName_B, arma_binary);
+		BV.save(outName_BV, arma_binary);
+		BH.save(outName_BH, arma_binary);
+		D.save(outName_D, arma_binary);
+
+	}
+
+	void loadAllParameters(int iter_num) {
+
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "cond_starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		string outName_D = out_dir + prefix.str() + "_D.mat";
+		
+		A.load(outName_A, arma_binary);
+		B.load(outName_B, arma_binary);
+		BV.load(outName_BV, arma_binary);
+		BH.load(outName_BH, arma_binary);
+		D.load(outName_D, arma_binary);
 	}
 
 
@@ -108,6 +149,7 @@ public:
 			
 
 
+
 			// TEST CODE
 			// cout << "predicting ... " << endl;
 			// vector<float> results = predict_list(*ptr_test_data);
@@ -116,14 +158,15 @@ public:
 			// if (prob_rmse < 0.93) {
 			// 	predict_qual_results_to_file(*ptr_qual_data, prob_rmse, iter_num);
 			// }
-			cout << "predicting ..." << endl;
-			vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map);
-			float prob_rmse = RMSE(*ptr_test_data, results);
-			cout << "RMSE: " << prob_rmse << endl;
-			if (prob_rmse < 0.925) {
-
-				write_prob_results_to_file(results, prob_rmse, iter_num);
-				predict_qual_results_to_file(prob_rmse, iter_num);
+			if (iter_num >= 10) {
+				cout << "predicting ..." << endl;
+				vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map);
+				float prob_rmse = RMSE(*ptr_test_data, results);
+				cout << "RMSE: " << prob_rmse << endl;
+				if (prob_rmse < 0.925) {
+					write_prob_results_to_file(results, prob_rmse, iter_num);
+					predict_qual_results_to_file(prob_rmse, iter_num);
+				}				
 			}
 
 
@@ -154,6 +197,10 @@ public:
 					thread_id = 0;
 				}
 
+			}
+
+			if (iter_num >= 10 && iter_num % 4 == 0) {
+				saveAllParameters(iter_num);
 			}
 
 		}
@@ -424,7 +471,7 @@ public:
 		vector<float>results = predict_array(*ptr_qual_data, *ptr_test_data, qual_map, test_map);
 
 		// store results
-		string out_dir = "frbm_results/";
+		string out_dir = "crbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
@@ -448,7 +495,7 @@ public:
 	void write_prob_results_to_file(vector<float> results, const float prob_rmse, unsigned int iter_num) {
 
 		// store results
-		string out_dir = "frbm_results/";
+		string out_dir = "crbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << "prob_" << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
@@ -463,7 +510,7 @@ public:
 
 		ofstream rbm_out_file;
 		rbm_out_file.open(rbm_out_name);
-		for (int i = 0; i < ptr_qual_data->size; i++) {
+		for (int i = 0; i < ptr_test_data->size; i++) {
 			rbm_out_file << results[i] << endl;
 		}
 		rbm_out_file.close();
@@ -512,7 +559,7 @@ unordered_map<unsigned int, int*> make_pre_map(const record_array &record_data) 
 int main () {
 
 
-	unsigned int ITER_NUM = 40;
+	unsigned int ITER_NUM = 60;
 	
 
 	// string train_file_name = "../../../data/mini_main.data";
