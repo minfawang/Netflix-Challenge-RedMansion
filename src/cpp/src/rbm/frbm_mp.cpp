@@ -63,7 +63,7 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 150;
+		F = 200;
 		C = 30;
 		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 1 + 1;
@@ -408,8 +408,8 @@ public:
 		vector<float>results = predict_array(*ptr_qual_data, *ptr_test_data, qual_map, test_map);
 
 		// store results
-		// string out_dir = "frbm_results/";
-		string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/qual/";
+		string out_dir = "frbm_results/";
+		// string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/qual/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
@@ -433,8 +433,8 @@ public:
 	void write_prob_results_to_file(vector<float> results, const float prob_rmse, unsigned int iter_num) {
 
 		// store results
-		// string out_dir = "frbm_results/";
-		string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/prob/";
+		string out_dir = "frbm_results/";
+		// string out_dir = "/Users/voiceup/Dropbox/cs156b_papers/results/prob/";
 		string rbm_out_name_pre;
 		ostringstream convert;
 		convert << "prob_" << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
