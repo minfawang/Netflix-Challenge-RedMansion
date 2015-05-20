@@ -11,7 +11,7 @@ const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
 //#define _TEST_NAN
-#define _USE_Y 0
+#define _USE_Y 1
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -580,6 +580,21 @@ public:
 					cout << setprecision(5);
 					cout << '\t' << RMSE(*ptr_test_data, result);
 					cout << '\t' << scale;
+
+                    char buf[256];
+                    sprintf(buf, "probe_steps\\y%d.txt", i_iter);
+
+                    ofstream output_file(buf);
+
+                    if (!output_file.is_open()) {
+                        cerr << "Fail to open output file" << endl;
+                        system("pause");
+                        exit(-1);
+                    }
+
+                    for (int i = 0; i < result.size(); i++) {
+                        output_file << result[i] << endl;
+                    }
 				}
 
 
@@ -600,7 +615,7 @@ public:
 					cout << "Writting output file" << endl;
 
 					char buf[256];
-					sprintf(buf, "output\\output_iter_%d.txt", i_iter);
+					sprintf(buf, "output_steps\\y%d.txt", i_iter);
 
 					ofstream output_file(buf);
 

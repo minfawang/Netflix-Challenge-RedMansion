@@ -26,10 +26,10 @@ int main(int argc, char * argv[]) {
     //float lambda = 0.000108964962676;
 
     unsigned int n_iter = 40;
-    float learning_rate = 0.00525696165666;
+    float learning_rate = 0.0042;
     float lambda_factor = 929721.058896;
-    float U0_lambda = 3.328e-5;
-    float U1_lambda = 0.000388;
+    float U0_lambda = 6.656e-5;
+    float U1_lambda = 0.0006212;
     float V_lambda = 0.00012283;
     float Y_lambda = 0.00012283;
     float lambda = 0.0001362;
@@ -85,7 +85,7 @@ int main(int argc, char * argv[]) {
 
 #if !_USE_MINI_SET
     
-	// est.ptr_qual_data = &qual;
+	est.ptr_qual_data = &qual;
 #endif
 
 	cout << "Start to fit" << endl;
