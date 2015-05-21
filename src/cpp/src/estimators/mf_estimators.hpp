@@ -147,7 +147,7 @@ public:
     double rmse_sum;
     double rmse_count;
 	gamma_mf() {
-		K = 20;
+		K = 40;
 		D_u = 20;
 		D_i = 20;
 

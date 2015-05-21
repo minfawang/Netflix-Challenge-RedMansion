@@ -59,7 +59,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 1
+#define _USE_MINI_SET 0
 #define _TEST_SAVE_AND_LOAD 0
 
 
@@ -85,7 +85,7 @@ int main(int argc, char * argv[]) {
 
 #if !_USE_MINI_SET
     
-	est.ptr_qual_data = &qual;
+	// est.ptr_qual_data = &qual;
 #endif
 
 	cout << "Start to fit" << endl;
