@@ -11,7 +11,7 @@ const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
 //#define _TEST_NAN
-#define _USE_Y 1
+#define _USE_Y 0
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -144,7 +144,8 @@ public:
 	double learning_rate_mul;
 	double learning_rate_min;
 
-
+    double rmse_train;
+    unsigned int rmse_train_count;
 	gamma_mf() {
 		K = 20;
 		D_u = 20;
@@ -303,6 +304,11 @@ public:
 		result += A_timebin(d_i, i);
 		result += B_timebin(d_j, j);
 
+        result = rcd.score - result;
+
+        rmse_train = (rmse_train * rmse_train_count + result * result) / (rmse_train_count + 1);
+        rmse_train_count += 1;
+
 #if _USE_Y
 		get_Y(Yi, i);
 		result += dot(V.unsafe_col(j), Yi);
@@ -326,7 +332,7 @@ public:
 #endif
 
 		//learning rate * pFpX
-		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (rcd.score - result);
+		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (result);
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
 		fang_add_mul(U0i, Vj, r_pFpX, K);
@@ -551,10 +557,13 @@ public:
 				tmr.tic();
 				cout << "Iter\t" << i_iter << '\t';
 
+                rmse_train = 0;
+                rmse_train_count = 0;
+
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-#pragma omp parallel for num_threads(N_THREADS)
+//#pragma omp parallel for num_threads(N_THREADS)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					unsigned int index_base = shuffle_idx[i] * batch_size;
 
@@ -579,24 +588,27 @@ public:
 					cout << fixed;
 					cout << setprecision(5);
 					cout << '\t' << RMSE(*ptr_test_data, result);
-					cout << '\t' << scale;
+                    cout << '\t' << rmse_train;
+					// cout << '\t' << scale;
 
                     char buf[256];
                     sprintf(buf, "probe_steps\\y%d.txt", i_iter);
 
+#if _USE_Y
                     ofstream output_file(buf);
 
                     if (!output_file.is_open()) {
                         cerr << "Fail to open output file" << endl;
                         system("pause");
                         exit(-1);
-                    }
+                    }nj
 
                     for (int i = 0; i < result.size(); i++) {
                         output_file << result[i] << endl;
                     }
+#endif
 				}
-
+                
 
 				cout << '\t';
 				tmr.toc();
@@ -608,14 +620,14 @@ public:
 					<< max(max(abs(Y))) << ' '
 					<< max(max(abs(A))) << ' '
 					<< max(max(abs(B))) << endl;
-
+#ifdef _USE_Y
 				if (ptr_qual_data != NULL) {
 					auto result = this->predict_list(*ptr_qual_data);
 
 					cout << "Writting output file" << endl;
 
 					char buf[256];
-					sprintf(buf, "output_steps\\y%d.txt", i_iter);
+					sprintf(buf, "output\\y%d.txt", i_iter);
 
 					ofstream output_file(buf);
 
@@ -628,13 +640,14 @@ public:
 					for (int i = 0; i < result.size(); i++) {
 						output_file << result[i] << endl;
 					}
+#endif
 				}
 
 				if (i_iter != n_iter - 1) {
 					vec A_shrink(A.n_rows);
 					vec B_shrink(B.n_rows);
 
-					double regu_pwr = lambda_factor;
+					double regu_pwr = lambda_factor * train_data.size;
 					// Recalculate all the shrinks
 					for (unsigned int i = 0; i < A.n_rows; i++) {
 						A_shrink[i] = pow(1 - A_lambda[i] * learning_rate_per_record, regu_pwr);
