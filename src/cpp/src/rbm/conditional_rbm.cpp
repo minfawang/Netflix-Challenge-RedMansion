@@ -64,7 +64,7 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 150;
+		F = 300;
 		C = 30;
 		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 1 + 1;
