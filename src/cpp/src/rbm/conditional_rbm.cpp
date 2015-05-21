@@ -74,11 +74,11 @@ public:
 		BV = randu<mat>(K, M) / 8.0;
 		BH = randu<vec>(F) / 8.0;
 
+		D = randu<mat>(F, M) / 8.0;
 
 		CD_K = 1;
 		lrate = 0.05 / BATCH_SIZE;
 
-		D = randu<mat>(F, M);
 
 	}
 
