@@ -144,6 +144,9 @@ public:
 	double learning_rate_mul;
 	double learning_rate_min;
 
+    double rmse_sum;
+    int rmse_count;
+
 
 	gamma_mf() {
 		K = 20;
@@ -308,6 +311,10 @@ public:
 		result += dot(V.unsafe_col(j), Yi);
 #endif
 
+        result = rcd.score - result;
+
+        rmse_sum += result * result;
+        rmse_count += 1;
 #ifdef _TEST_NAN
 		if (isnan(result)) {
 			cout << result << endl;
@@ -326,7 +333,7 @@ public:
 #endif
 
 		//learning rate * pFpX
-		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (rcd.score - result);
+		r_pFpX = data_mul * learning_rate_per_record * 2.0 * result;
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
 		fang_add_mul(U0i, Vj, r_pFpX, K);
@@ -551,6 +558,9 @@ public:
 				tmr.tic();
 				cout << "Iter\t" << i_iter << '\t';
 
+                rmse_sum = 0;
+                rmse_count = 0;
+
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
@@ -574,7 +584,7 @@ public:
 						cout << '.';
 					}
 
-                    if (i % (train_data.size / batch_size / 16) == 0) {
+                    if (i % (train_data.size / batch_size / 100) == 0) {
                         vec A_shrink(A.n_rows);
                         vec B_shrink(B.n_rows);
 
@@ -610,7 +620,7 @@ public:
 					cout << fixed;
 					cout << setprecision(5);
 					cout << '\t' << RMSE(*ptr_test_data, result);
-					cout << '\t' << scale;
+					cout << '\t' << rmse_sum / rmse_count;
 				}
 
 

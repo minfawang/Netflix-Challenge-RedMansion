@@ -18,13 +18,13 @@ int main(int argc, char * argv[]) {
     //float lambda = 0.0004;
 
     unsigned int n_iter = 40;
-    float learning_rate = 0.015;
-    float lambda_factor = 10000;
-    float U0_lambda = 0.0004;
-    float U1_lambda = 0.0012;
-    float V_lambda = 0.0012;
-    float Y_lambda = 0.0004;
-    float lambda = 0.0004;
+    float learning_rate = 0.005;
+    float lambda_factor = 1000;
+    float U0_lambda = 0.001;
+    float U1_lambda = 0.01;
+    float V_lambda = 0.001;
+    float Y_lambda = 0.001;
+    float lambda = 0.002;
 
     char *output_name = "output\\output.txt";
     char *probe_output_name = "probe_output\\output.txt";
@@ -146,5 +146,5 @@ int main(int argc, char * argv[]) {
 	cout << toc_time - tic_time << "ms" << endl;
 
 
-	//system("pause");
+	system("pause");
 }
