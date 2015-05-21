@@ -11,7 +11,7 @@ const double PI = 3.141592653589793238463;
 const int N_THREADS = 8;
 
 //#define _TEST_NAN
-#define _USE_Y 1
+#define _USE_Y 0
 
 #ifndef __MF_ESTIMATORS
 #define __MF_ESTIMATORS
@@ -144,7 +144,8 @@ public:
 	double learning_rate_mul;
 	double learning_rate_min;
 
-
+    double rmse_sum;
+    double rmse_count;
 	gamma_mf() {
 		K = 20;
 		D_u = 20;
@@ -324,9 +325,12 @@ public:
 			cout << endl;
 		}
 #endif
+        result = rcd.score - result;
 
+        rmse_sum += result * result;
+        rmse_count += 1;
 		//learning rate * pFpX
-		r_pFpX = data_mul * learning_rate_per_record * 2.0 * (rcd.score - result);
+		r_pFpX = data_mul * learning_rate_per_record * 2.0 * result;
 
 		// U(:,i) = U(:,i) - rate * gUi; gUi = - pFpX * V(:,j);
 		fang_add_mul(U0i, Vj, r_pFpX, K);
@@ -551,6 +555,9 @@ public:
 				tmr.tic();
 				cout << "Iter\t" << i_iter << '\t';
 
+
+                rmse_sum = 0;
+                rmse_count = 0;
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
@@ -579,11 +586,11 @@ public:
 					cout << fixed;
 					cout << setprecision(5);
 					cout << '\t' << RMSE(*ptr_test_data, result);
-					cout << '\t' << scale;
+                    cout << '\t' << rmse_sum / rmse_count;
 
                     char buf[256];
                     sprintf(buf, "probe_steps\\y%d.txt", i_iter);
-
+#if _USE_Y
                     ofstream output_file(buf);
 
                     if (!output_file.is_open()) {
@@ -595,6 +602,7 @@ public:
                     for (int i = 0; i < result.size(); i++) {
                         output_file << result[i] << endl;
                     }
+#endif
 				}
 
 
@@ -616,7 +624,7 @@ public:
 
 					char buf[256];
 					sprintf(buf, "output_steps\\y%d.txt", i_iter);
-
+#if _USE_Y
 					ofstream output_file(buf);
 
 					if (!output_file.is_open()) {
@@ -628,6 +636,7 @@ public:
 					for (int i = 0; i < result.size(); i++) {
 						output_file << result[i] << endl;
 					}
+#endif
 				}
 
 				if (i_iter != n_iter - 1) {
