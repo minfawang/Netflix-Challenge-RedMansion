@@ -110,7 +110,7 @@ public:
 };
 
 float RMSE(const record_array & test_data, const vector<float> & prediction) {
-	double s = 0;
+	float s = 0;
 	for (int i = 0; i < test_data.size; i++) {
 		s += (test_data[i].score - prediction[i]) * (test_data[i].score - prediction[i]);
 	}

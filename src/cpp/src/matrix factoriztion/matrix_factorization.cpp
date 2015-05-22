@@ -7,7 +7,7 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-    int option = 1;
+    int option = 0;
     int n_iter = 30;
 
     char *output_name = "output\\output.txt";
@@ -16,8 +16,8 @@ int main(int argc, char * argv[]) {
     char *learning_rate_file = "learning_rate.tmp";
     char *lambda_file = "lambda.tmp";
 
-    double scale = 1;
-    double lambda_factor = 1000;
+    float scale = 1;
+    float lambda_factor = 1000;
 
 	if (argc == 9) {
         option = atoi(argv[1]);
@@ -40,7 +40,7 @@ int main(int argc, char * argv[]) {
     est.learning_rate_file = learning_rate_file;
     est.lambda_file = lambda_file;
 
-    est.lambda_factor = 1000;
+    est.lambda_factor = lambda_factor;
 
 	//constant_estimator est;
 
