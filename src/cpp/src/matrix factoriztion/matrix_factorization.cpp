@@ -7,50 +7,27 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-	//unsigned int n_iter = 40;
-	//float learning_rate = 0.008;
-	//float lambda_factor = 1000000;
-	//float U0_lambda = 0.00008;
-	//float U1_lambda = 0.00008;
-	//float V_lambda = 0.00008;
-	//float Y_lambda = 0.00008;
-	//float lambda = 0.0001;
-
-    //unsigned int n_iter = 40;
-    //float learning_rate = 0.00657120207082;
-    //float lambda_factor = 1162151.32362;
-    //float U0_lambda = 5.32490187658e-05;
-    //float U1_lambda = 0.000198800471752;
-    //float V_lambda = 9.82648148159e-05;
-    //float Y_lambda = 0.00008;
-    //float lambda = 0.000108964962676;
-
-    unsigned int n_iter = 40;
-    float learning_rate = 0.0042;
-    float lambda_factor = 929721.058896;
-    float U0_lambda = 6.656e-5;
-    float U1_lambda = 0.0006212;
-    float V_lambda = 0.00012283;
-    float Y_lambda = 0.00012283;
-    float lambda = 0.0001362;
+    int n_iter = 40;
 
     char *output_name = "output\\output.txt";
     char *probe_output_name = "probe_output\\output.txt";
-	if (argc == 11) {
+
+    char *learning_rate_file = "learning_rate.tmp";
+    char *lambda_file = "lambda.tmp";
+
+	if (argc == 6) {
         output_name = argv[1];
         probe_output_name = argv[2];
-		n_iter = atoi(argv[3]);		
-		lambda_factor = atof(argv[4]);
-        learning_rate = atof(argv[5]);
-		U0_lambda = atof(argv[6]);
-		U1_lambda = atof(argv[7]);
-		V_lambda = atof(argv[8]);
-		Y_lambda = atof(argv[9]);
-		lambda = atof(argv[10]);
+        learning_rate_file = argv[3];
+        lambda_file = argv[4];
+		n_iter = atoi(argv[5]);		        
 	}
 
 	record_array main, prob, qual;
 	gamma_mf est;
+
+    est.learning_rate_file = learning_rate_file;
+    est.lambda_file = lambda_file;
 
 	//constant_estimator est;
 
@@ -59,7 +36,7 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 0
+#define _USE_MINI_SET 1
 #define _TEST_SAVE_AND_LOAD 0
 
 
@@ -71,15 +48,6 @@ int main(int argc, char * argv[]) {
 	prob.load("prob_data.data");
 	qual.load("qual_data.data");
 #endif
-
-	est.learning_rate = learning_rate;
-	est.lambda_factor = lambda_factor;
-
-	est.U0_lambda = U0_lambda;
-	est.U1_lambda = U1_lambda;
-	est.V_lambda = V_lambda;
-	est.Y_lambda = Y_lambda;
-	est.lambda = lambda;
 
 	est.ptr_test_data = &prob;
 

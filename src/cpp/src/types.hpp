@@ -14,7 +14,7 @@ class timer {
 private:
 	time_t last_time;
 public:
-	unsigned int display_mode;
+	int display_mode;
 public:
 	timer() {
 		display_mode = 0;
@@ -39,9 +39,9 @@ public:
 class record {
 
 public:
-	unsigned int user;
-	unsigned int movie;
-	unsigned int date;
+	int user;
+	int movie;
+	int date;
 	float score;
 
 };
@@ -78,7 +78,7 @@ public:
 		}
 	}
 
-	const record & operator [] (unsigned int index) const{
+	const record & operator [] (int index) const{
 		return data[index];
 	}
 
@@ -122,7 +122,7 @@ public:
 	virtual bool save(const char * file_name) = 0;
 	virtual bool load(const char * file_name) = 0;
 
-	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) = 0;
+	virtual void fit(const record_array & train_data, int n_iter = 1, bool countinue_fit = false) = 0;
 
 	virtual float predict(const record & rcd) = 0;
 
