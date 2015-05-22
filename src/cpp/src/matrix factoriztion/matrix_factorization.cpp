@@ -7,7 +7,8 @@ using namespace arma;
 
 int main(int argc, char * argv[]) {
 
-    int n_iter = 40;
+    int option = 1;
+    int n_iter = 30;
 
     char *output_name = "output\\output.txt";
     char *probe_output_name = "probe_output\\output.txt";
@@ -15,19 +16,31 @@ int main(int argc, char * argv[]) {
     char *learning_rate_file = "learning_rate.tmp";
     char *lambda_file = "lambda.tmp";
 
-	if (argc == 6) {
-        output_name = argv[1];
-        probe_output_name = argv[2];
-        learning_rate_file = argv[3];
-        lambda_file = argv[4];
-		n_iter = atoi(argv[5]);		        
-	}
+    double scale = 1;
+    double lambda_factor = 1000;
+
+	if (argc == 9) {
+        option = atoi(argv[1]);
+        output_name = argv[2];
+        probe_output_name = argv[3];
+        learning_rate_file = argv[4];
+        lambda_file = argv[5];
+		n_iter = atoi(argv[6]);	
+        scale = atof(argv[7]);
+        lambda_factor = atof(argv[8]);
+    } else{
+        cout << "Arguments mismatch" << endl;
+    }
 
 	record_array main, prob, qual;
 	gamma_mf est;
 
+    est.scale = 1;
+
     est.learning_rate_file = learning_rate_file;
     est.lambda_file = lambda_file;
+
+    est.lambda_factor = 1000;
 
 	//constant_estimator est;
 
@@ -36,25 +49,23 @@ int main(int argc, char * argv[]) {
 
 	tic_time = clock();
 
-#define _USE_MINI_SET 1
 #define _TEST_SAVE_AND_LOAD 0
 
 
-#if _USE_MINI_SET
-	main.load("mini_main.data");
-	prob.load("mini_prob.data");
-#else
-	main.load("main_data.data");
-	prob.load("prob_data.data");
-	qual.load("qual_data.data");
-#endif
+    if (option == 0) {
+        main.load("mini_main.data");
+        prob.load("mini_prob.data");
+
+    } else{
+        main.load("main_data.data");
+        prob.load("prob_data.data");
+        qual.load("qual_data.data");
+    }
 
 	est.ptr_test_data = &prob;
 
-#if !_USE_MINI_SET
     
 	// est.ptr_qual_data = &qual;
-#endif
 
 	cout << "Start to fit" << endl;
 
@@ -81,25 +92,27 @@ int main(int argc, char * argv[]) {
     for (int i = 0; i < result.size(); i++) {
         probe_output_file << result[i] << endl;
     }
-#if !_USE_MINI_SET
-	cout << "Qual set" << endl;
 
-	result = est.predict_list(qual);
+    if (option != 0) {
+        cout << "Qual set" << endl;
 
-	cout << "Writting output file" << endl;
+        result = est.predict_list(qual);
 
-	ofstream output_file(output_name);
+        cout << "Writting output file" << endl;
 
-	if (!output_file.is_open()) {
-		cerr << "Fail to open output file" << endl;
-		system("pause");
-		exit(-1);
-	}
+        ofstream output_file(output_name);
 
-	for (int i = 0; i < result.size(); i++) {
-		output_file << result[i] << endl;
-	}
-#endif
+        if (!output_file.is_open()) {
+            cerr << "Fail to open output file" << endl;
+            system("pause");
+            exit(-1);
+        }
+
+        for (int i = 0; i < result.size(); i++) {
+            output_file << result[i] << endl;
+        }
+    }
+
 
 #if _TEST_SAVE_AND_LOAD
 	cout << "Saving Model to test_model_files/test_model.data" << endl;

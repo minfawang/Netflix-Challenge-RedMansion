@@ -181,7 +181,8 @@ public:
     double rmse_sum;
     double rmse_count;
 	gamma_mf() {
-		K = 1;
+		K = 20;
+        scale = 1;
 		D_u = 20;
 		D_i = 20;
         //D_if = 10;
@@ -402,14 +403,14 @@ public:
 		fang_add_mul(Vj, U_col.memptr(), r_pFpX * V_learning_rate * scale, K);
 
 		// A(:,i) = A(:,i) - rate * gAi; gAi = - pFpX;
-		fang_add_mul2(A.colptr(i), A_func_val, A_learning_rate.memptr(), r_pFpX, A.n_rows);
+        fang_add_mul2(A.colptr(i), A_func_val, A_learning_rate.memptr(), r_pFpX * scale, A.n_rows);
 
 		// B(:,j) = B(:,j) - rate * gBj; gBj = - pFpX;
-		fang_add_mul2(B.colptr(j), B_func_val, B_learning_rate.memptr(), r_pFpX * (c + 1), B.n_rows);
+        fang_add_mul2(B.colptr(j), B_func_val, B_learning_rate.memptr(), r_pFpX * (c + 1) * scale, B.n_rows);
 
-		A_timebin(d_i, i) += r_pFpX * A_timebin_learning_rate;
-		B_timebin(d_j, j) += r_pFpX * (c + 1) * B_timebin_learning_rate;
-        C_timebin(d_i, i) += r_pFpX * (b1 + b2) * C_timebin_learning_rate;
+        A_timebin(d_i, i) += r_pFpX * A_timebin_learning_rate * scale;
+        B_timebin(d_j, j) += r_pFpX * (c + 1) * B_timebin_learning_rate * scale;
+        C_timebin(d_i, i) += r_pFpX * (b1 + b2) * C_timebin_learning_rate * scale;
 
 #if _USE_Y
 		update_Y(i, r_pFpX * Y_learning_rate, Vj, K);
@@ -424,39 +425,34 @@ public:
         double regu_pwr = lambda_factor;
         // Recalculate all the shrinks
         for (int i = 0; i < A.n_rows; i++) {
-            A_shrink[i] = pow(1 - A_lambda[i] * A_learning_rate[i], regu_pwr);
+            A_shrink[i] = pow(1 - A_lambda[i] * A_learning_rate[i] * scale, regu_pwr);
         }
 
         for (int i = 0; i < B.n_rows; i++) {
-            B_shrink[i] = pow(1 - B_lambda[i] * B_learning_rate[i], regu_pwr);
+            B_shrink[i] = pow(1 - B_lambda[i] * B_learning_rate[i] * scale, regu_pwr);
         }
 
         // Regularization
 
-        U0 *= pow(1 - U0_lambda * U0_learning_rate, regu_pwr);
-        U1 *= pow(1 - U1_lambda * U1_learning_rate, regu_pwr);
-        V *= pow(1 - V_lambda * V_learning_rate, regu_pwr);
-        Y *= pow(1 - Y_lambda * Y_learning_rate, regu_pwr);
+        U0 *= pow(1 - U0_lambda * U0_learning_rate * scale, regu_pwr);
+        U1 *= pow(1 - U1_lambda * U1_learning_rate * scale, regu_pwr);
+        V *= pow(1 - V_lambda * V_learning_rate * scale, regu_pwr);
+        Y *= pow(1 - Y_lambda * Y_learning_rate * scale, regu_pwr);
 
-        A_timebin *= pow(1 - A_timebin_lambda * A_timebin_learning_rate, regu_pwr);
-        B_timebin *= pow(1 - B_timebin_lambda * B_timebin_learning_rate, regu_pwr);
+        A_timebin *= pow(1 - A_timebin_lambda * A_timebin_learning_rate * scale, regu_pwr);
+        B_timebin *= pow(1 - B_timebin_lambda * B_timebin_learning_rate * scale, regu_pwr);
 
-        C_timebin *= pow(1 - C_timebin_lambda * C_timebin_learning_rate, regu_pwr);
+        C_timebin *= pow(1 - C_timebin_lambda * C_timebin_learning_rate * scale, regu_pwr);
 
         for (int j = 0; j < A.n_cols; j++) {
             A.col(j) %= A_shrink; // Element wise multiplication
         }
         for (int j = 0; j < B.n_cols; j++) {
             B.col(j) %= B_shrink; // Element wise multiplication
-        }
-
-        scale = scale * learning_rate_mul;
-        learning_rate_per_record = learning_rate * scale;
+        }        
     }
 
 	void init(const record_array & train_data, int n_user, int n_movie) {
-		// Set scale
-		scale = 1;
 
 		// Calculate mu
 		int cnt[6];
@@ -538,7 +534,7 @@ public:
 
 		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(0.4));
 
-		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1.2));
+		A_function_table.insert_rows(A_function_table.n_rows, ftg.abspwr_table(1));
 
 
 		// B table
@@ -547,7 +543,7 @@ public:
 
 		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(0.4));
 
-		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1.2));
+		B_function_table.insert_rows(B_function_table.n_rows, ftg.abspwr_table(1));
 
 		vector<double> w_list = { 2.0 * MAX_DATE / 28, 2.0 * MAX_DATE / 7, 2.0 * MAX_DATE / 90, 0.25, 1, 4};
 		for (int i = 0; i < w_list.size(); i++) {
@@ -561,18 +557,17 @@ public:
 			B_function_table.insert_rows(B_function_table.n_rows, ftg.cosw_table(i));
 		}
 
-
-
 		A.resize(A_function_table.n_rows, n_user);
 		B.resize(B_function_table.n_rows, n_movie);
 		
+
 		U0.fill(fill::randu);
 		U1.fill(fill::zeros);
 		V.fill(fill::randu);
-		Y.fill(fill::randu);
+		Y.fill(fill::zeros);
 
-		A.fill(fill::randu);
-		B.fill(fill::randu);
+		A.fill(fill::zeros);
+		B.fill(fill::zeros);
 		A_timebin.fill(fill::zeros);
 		B_timebin.fill(fill::zeros);
         C_timebin.fill(fill::zeros);
@@ -653,7 +648,7 @@ public:
 				// Reshuffle first
 				reshuffle(shuffle_idx, train_data.size / batch_size);
 
-#pragma omp parallel for num_threads(N_THREADS)
+//#pragma omp parallel for num_threads(N_THREADS)
 				for (int i = 0; i < train_data.size / batch_size; i++) {
 					int index_base = shuffle_idx[i] * batch_size;
 
@@ -669,9 +664,14 @@ public:
 						}
 					}
 
-					if (i % block_size == 0) {
-						cout << '.';
+					if ((i + 1) % block_size == 0) {
+						cout << '.';                        
 					}
+
+                    if ((i + 1) % (train_data.size / batch_size / 16) == 0 && ((i + 1) % (train_data.size / batch_size) != 0))
+                    {
+                        regular();
+                    }
 				}
 				if (ptr_test_data != NULL) {
 					vector<float> result = this->predict_list(*ptr_test_data);
@@ -701,13 +701,23 @@ public:
 				cout << '\t';
 				tmr.toc();
 
+                //cout << "----------------------------------------------------------" << endl;
+                cout << setprecision(3);
 				cout << "\t\t";
-				cout << max(max(abs(U0))) << ' '
-					<< max(max(abs(U1))) << ' '
-					<< max(max(abs(V))) << ' '
-					<< max(max(abs(Y))) << ' '
-					<< max(max(abs(A))) << ' '
-					<< max(max(abs(B))) << endl;
+                cout << max(max(abs(U0))) << ' '
+                    << max(max(abs(U1))) << ' '
+                    << max(max(abs(V))) << ' '
+                    << max(max(abs(Y))) << ' ' << endl;
+
+                cout << "\t\t";
+                cout << max(max(abs(A))) << ' '
+                    << max(max(abs(B))) << ' '
+                    << max(max(abs(A_timebin))) << ' '
+                    << max(max(abs(B_timebin))) << ' '
+                    << max(max(abs(C_timebin))) << endl;
+                cout << endl;
+                //cout << "----------------------------------------------------------" << endl;
+
 
 				if (ptr_qual_data != NULL) {
 					auto result = this->predict_list(*ptr_qual_data);
@@ -734,6 +744,7 @@ public:
 				if (i_iter != n_iter - 1) {
                     regular();
 				}
+                scale = scale * learning_rate_mul;
 			}
 			delete[]shuffle_idx;
 		}
