@@ -1,3 +1,4 @@
 data/
 *.mat
 *results/
+cond_starting_parameters/

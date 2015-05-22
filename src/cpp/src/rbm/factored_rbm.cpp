@@ -388,7 +388,7 @@ public:
 		string out_dir = "frbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
-		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		convert << prob_rmse << "_frbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
 		rbm_out_name_pre = out_dir + convert.str();
 		string rbm_out_name = rbm_out_name_pre;
 

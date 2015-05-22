@@ -64,7 +64,7 @@ public:
 
 	basic_rbm() {
 		K = 5;
-		F = 150;
+		F = 200;
 		C = 30;
 		M = 17770 / 1 + 1; // TODO: change M to be total number of movies
 		N = 458293 / 1 + 1;
@@ -474,7 +474,7 @@ public:
 		string out_dir = "crbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
-		convert << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		convert << prob_rmse << "_crbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
 		rbm_out_name_pre = out_dir + convert.str();
 		string rbm_out_name = rbm_out_name_pre;
 
@@ -498,7 +498,7 @@ public:
 		string out_dir = "crbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
-		convert << "prob_" << prob_rmse << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		convert << "prob" << prob_rmse << "_crbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
 		rbm_out_name_pre = out_dir + convert.str();
 		string rbm_out_name = rbm_out_name_pre;
 
