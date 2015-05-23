@@ -1,6 +1,8 @@
 #include <armadillo>
 #include <iostream>
 #include <unordered_map>
+#include <tuple>
+#include <time.h>
 #include <omp.h>
 
 #include "../types.hpp"
@@ -16,6 +18,41 @@
 
 
 using namespace arma;
+
+
+typedef tuple<unsigned int, unsigned int> TUPUD;
+
+struct key_hash : public unary_function<TUPUD, size_t> {
+ size_t operator()(const TUPUD& k) const {
+   return get<0>(k) ^ get<1>(k);
+ }
+};
+
+struct key_equal : public binary_function<TUPUD, TUPUD, bool> {
+bool operator()(const TUPUD& v0, const TUPUD& v1) const {
+return (get<0>(v0) == get<0>(v1) && get<1>(v0) == get<1>(v1));
+}
+};
+
+typedef unordered_map<const TUPUD, vec, key_hash , key_equal> map_BUD;
+
+
+void fillRandomBUD(record_array &rcd_data, map_BUD &bud) {
+	for (int i = 0; i < rcd_data.size; i++) {
+		record r = rcd_data.data[i];
+		unsigned int user = r.user;
+		unsigned int date = r.date;
+
+		bud[make_tuple(user, date)] = randu<vec>(5) / 8.0; // here K = 5
+	}
+
+	cout << "finish filling user-date bias" << endl;
+}
+
+
+
+
+
 
 
 bool isFuckedUp(double num) {
@@ -42,13 +79,21 @@ public:
 	vec BH; // F
 	// mat BH; // K * F
 
+	mat BU;
+	map_BUD BUD;
+
 	unsigned int C;
 	unsigned int N;
 	unsigned int M;
 	unsigned int K;
 	unsigned int F;
 	unsigned int CD_K;
+
+
+	double weight_decay;
 	double lrate; // learning rate
+	double ulrate;
+	double utlrate;
 
 
 	record_array *ptr_test_data;
@@ -58,6 +103,12 @@ public:
 	unordered_map<unsigned int, int*> train_map;
 	unordered_map<unsigned int, int*> test_map;
 	unordered_map<unsigned int, int*> qual_map;
+
+	vector<unsigned int> train_vec;
+	vector<unsigned int> test_vec;
+	vector<unsigned int> qual_vec;
+
+
 	mat D;
 
 
@@ -77,9 +128,13 @@ public:
 
 		D = randu<mat>(F, M) / 8.0;
 
-		CD_K = 1;
-		lrate = 0.05 / BATCH_SIZE;
 
+		CD_K = 1;
+		lrate = 0.04 / BATCH_SIZE;
+		ulrate = 0.0025;
+		utlrate = 0.008;
+
+		weight_decay = 0.001;
 
 	}
 
@@ -92,48 +147,13 @@ public:
 	}
 
 
-	void saveAllParameters(int iter_num) {
-		ostringstream prefix;
-		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
-
-		string out_dir = "cond_starting_parameters/";
-
-		string outName_A = out_dir + prefix.str() + "_A.cub";
-		string outName_B = out_dir + prefix.str() + "_B.mat";
-		string outName_BV = out_dir + prefix.str() + "_BV.mat";
-		string outName_BH = out_dir + prefix.str() + "_BH.vec";
-		string outName_D = out_dir + prefix.str() + "_D.mat";
-		
-		A.save(outName_A, arma_binary);
-		B.save(outName_B, arma_binary);
-		BV.save(outName_BV, arma_binary);
-		BH.save(outName_BH, arma_binary);
-		D.save(outName_D, arma_binary);
-
-	}
-
-	void loadAllParameters(int iter_num) {
-
-		ostringstream prefix;
-		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
-
-		string out_dir = "cond_starting_parameters/";
-
-		string outName_A = out_dir + prefix.str() + "_A.cub";
-		string outName_B = out_dir + prefix.str() + "_B.mat";
-		string outName_BV = out_dir + prefix.str() + "_BV.mat";
-		string outName_BH = out_dir + prefix.str() + "_BH.vec";
-		string outName_D = out_dir + prefix.str() + "_D.mat";
-		
-		A.load(outName_A, arma_binary);
-		B.load(outName_B, arma_binary);
-		BV.load(outName_BV, arma_binary);
-		BH.load(outName_BH, arma_binary);
-		D.load(outName_D, arma_binary);
-	}
-
-
 	virtual void fit(const record_array & train_data, unsigned int n_iter = 1, bool countinue_fit = false) {
+
+
+		// initialize N
+		// N = train_vec.size();
+		BU = randu<mat>(K, N) / 8.0;
+
 
 
 		// training stage
@@ -160,11 +180,11 @@ public:
 			// 	predict_qual_results_to_file(*ptr_qual_data, prob_rmse, iter_num);
 			// }
 			if (iter_num >= 10) {
-				cout << "predicting ..." << endl;
-				vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map);
+				cout << "\npredicting: " << flush;
+				vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map, test_vec, qual_vec);
 				float prob_rmse = RMSE(*ptr_test_data, results);
 				cout << "RMSE: " << prob_rmse << endl;
-				if (prob_rmse < 0.925) {
+				if (prob_rmse < 0.92) {
 					write_prob_results_to_file(results, prob_rmse, iter_num);
 					predict_qual_results_to_file(prob_rmse, iter_num);
 				}				
@@ -172,7 +192,7 @@ public:
 
 
 			
-			cout << "working on iteration " << iter_num << "..." << endl;
+			cout << "\niteration " << iter_num << ": " << flush;
 
 			int starts[BATCH_SIZE];
 			int ends[BATCH_SIZE];
@@ -180,7 +200,10 @@ public:
 			int thread_id = 0;
 
 
-			for (unsigned int user = 1; user < N; ++user) {
+			// for (unsigned int user = 1; user < N; ++user) {
+			for (int iv = 0; iv < train_vec.size(); iv++) {
+				unsigned int user = train_vec[iv];
+
 				int* ids = train_map[user];
 				users[thread_id] = user;
 				starts[thread_id] = ids[0];
@@ -189,12 +212,27 @@ public:
 				thread_id++;
 
 				// process a batch
-				if (thread_id == BATCH_SIZE || user == N-1) {
+				if (thread_id == BATCH_SIZE || user == train_vec.size()-1) {
+
+					// test code
+					if ((iv+1) % (20 * BATCH_SIZE) == 0)
+						cout << "." << flush;
+					// cout << "cur process end at: " << user << endl;
+
+
+
 #pragma omp parallel for num_threads(NUM_THREADS)
 					for (int t = 0; t < thread_id; t++) {
 						train(train_data.data+starts[t], users[t], ends[t]-starts[t], CD_K);
 					}
 
+
+					// // impose regularization
+					// BH *= (1 - weight_decay);
+					// B *= (1 - weight_decay);
+
+
+					// reset thread_id
 					thread_id = 0;
 				}
 
@@ -223,6 +261,7 @@ public:
 		vec Ht = zeros<vec>(F);
 
 		vector<int> ims(size);
+		vector<int> its(size);
 		cube W_user(K, F, size);
 
 		// TEST CODE
@@ -276,8 +315,12 @@ public:
 			Vt(int(r.score)-1, i) = 1;
 
 			ims[i] = r.movie;
+			its[i] = r.date;
 			W_user.slice(i) = A.slice(r.movie) * B;
+
+
 		}
+	
 
 		/*
 		/////////////////// set up H0 by V -> H //////////////////
@@ -306,7 +349,7 @@ public:
 
 			// negative phase: H -> V
 			for (int i = 0; i < size; i++) {
-				Vt.col(i) = exp(BV.col(ims[i]) + W_user.slice(i) * Ht);
+				Vt.col(i) = exp(BU.col(user_id) + BUD[make_tuple(user_id, its[i])] + BV.col(ims[i]) + W_user.slice(i) * Ht);
 			}
 
 			// Normalize Vt -> sum_k (Vt(k, i)) = 1
@@ -315,26 +358,54 @@ public:
 		}
 
 
+
+		// Weights update
+		mat V_diff = V0 - Vt;
+		vec H_diff = H0 - Ht;
+
+
+		// update BU
+		// TODO: test the validity of this expression, BU.col is vector, but V0 is mat
+		// BU.col(user_id) *= (1 - weight_decay);
+		BU.col(user_id) += ulrate * normalise(sum(V_diff, 1), 1);
+
+
+
 		// update BH
-		BH += lrate * (H0 - Ht);
+		BH += lrate * H_diff;
 
 		// update B
 		// update BV
 		// update A
+		// update BUD
 		mat B_old = B;
 		for (int i = 0; i < size; i++) {
+
+			BUD[make_tuple(user_id, its[i])] += utlrate * normalise(sum(V_diff, 1), 1);
+
+
 			mat HV_diff = (V0.col(i) * H0.t() - Vt.col(i) * Ht.t());
-			BV.col(ims[i]) += lrate * (V0.col(i) - Vt.col(i));
+
+			// BV.col(ims[i]) *= (1 - weight_decay / BATCH_SIZE);
+			BV.col(ims[i]) += lrate * V_diff.col(i);
+
 			B += lrate * A.slice(ims[i]).t() * HV_diff;
+
+
+			// A.slice(ims[i]) *= (1 - weight_decay / BATCH_SIZE);
 			A.slice(ims[i]) += lrate * HV_diff * B_old.t();
 		}
 
 		// update D
-		D.each_col(r) += lrate * (H0 - Ht);
+		for (auto &each_r : r) {
+			// D.col(each_r) *= (1 - weight_decay / BATCH_SIZE);
+			D.col(each_r) += lrate * H_diff;
+		}
+		// D.each_col(r) += lrate * (H0 - Ht);
 	}
 
 
-	vector<float> predict_array(const record_array &rcd_array, const record_array &helper_array, unordered_map<unsigned int, int*> &predict_map, unordered_map<unsigned int, int*> &helper_map) {
+	vector<float> predict_array(const record_array &rcd_array, const record_array &helper_array, unordered_map<unsigned int, int*> &predict_map, unordered_map<unsigned int, int*> &helper_map, const vector<unsigned int> &predict_vec, const vector<unsigned int> &helper_vec) {
 		vector<float>results(rcd_array.size);
 		int users[BATCH_SIZE];
 		// int starts[BATCH_SIZE];
@@ -343,28 +414,41 @@ public:
 		int thread_id = 0;
 		int batch_id = 0;
 		int* test_ids;
-		for (int user_id = 1; user_id < N; user_id++) {
-			unordered_map<unsigned int, int*>::const_iterator test_ids_iter = predict_map.find(user_id);
-			if (test_ids_iter != predict_map.end()) {
-				// test_ids = test_ids_iter->second;
 
-				users[thread_id] = user_id;
-				// starts[thread_id] = test_ids[0];
-				// ends[thread_id] = test_ids[1];
 
-				thread_id++;
+		// for (int user_id = 1; user_id < N; user_id++) {
+			// unordered_map<unsigned int, int*>::const_iterator test_ids_iter = predict_map.find(user_id);
+			// if (test_ids_iter != predict_map.end()) {
+				// // test_ids = test_ids_iter->second;
 
-				if (thread_id == BATCH_SIZE) {
+				// users[thread_id] = user_id;
+				// // starts[thread_id] = test_ids[0];
+				// // ends[thread_id] = test_ids[1];
+			// }
+
+		// for (auto &user_id : predict_vec) {
+		for (int iv = 0; iv < predict_vec.size(); iv++) {
+
+			int user_id = predict_vec[iv];
+
+			users[thread_id] = user_id;
+			thread_id++;
+
+			if (thread_id == BATCH_SIZE) {
+
+				if ((iv + 1) % (20 * BATCH_SIZE) == 0)
+					cout << "." << flush;
+
+
 #pragma omp parallel for num_threads(NUM_THREADS)
-					for (int t = 0; t < thread_id; t++) {
-						predict_user(users[t], rcd_array, helper_array, predict_map, helper_map, results);
-					}
-
-					thread_id = 0;
-					batch_id++;
+				for (int t = 0; t < thread_id; t++) {
+					predict_user(users[t], rcd_array, helper_array, predict_map, helper_map, results);
 				}
 
+				thread_id = 0;
+				batch_id++;
 			}
+
 		}
 
 		// user == N
@@ -429,6 +513,7 @@ public:
 			}
 		}
 
+
 		vec Du_sum = sum(D.cols(r), 1);
 
 
@@ -443,7 +528,7 @@ public:
 				// double w = W(k, f, r_train.movie);
 				double w  = 0;
 				for (int c = 0; c < C; c++) {
-					w += A(k, c, r_train.movie) * B(c, f);	
+					w += A(k, c, r_train.movie) * B(c, f);
 				}
 				Hu(f) += w;
 			}
@@ -454,8 +539,13 @@ public:
 		// negative phase to predict score
 		for (int u = test_start; u < test_end; u++) {
 			record r_test = rcd_array.data[u];
-			Vum = normalise( exp(BV.col(r_test.movie) + A.slice(r_test.movie) * B * Hu), 1);
 
+			vec bud = zeros<vec>(K);
+			if (BUD.find(make_tuple(user, r_test.date)) != BUD.end()) {
+				bud = BUD[make_tuple(user, r_test.date)];
+			}
+			Vum = exp(BU.col(user) + bud + BV.col(r_test.movie) + A.slice(r_test.movie) * B * Hu);
+			Vum = normalise(Vum, 1);
 			results[u] = dot(Vum, scores);
 		}
 	}
@@ -467,13 +557,13 @@ public:
 
 	void predict_qual_results_to_file(const float prob_rmse, unsigned int iter_num) {
 		cout << "predicting qual data ..." << endl;
-		vector<float>results = predict_array(*ptr_qual_data, *ptr_test_data, qual_map, test_map);
+		vector<float>results = predict_array(*ptr_qual_data, *ptr_test_data, qual_map, test_map, qual_vec, test_vec);
 
 		// store results
-		string out_dir = "crbm_results/";
+		string out_dir = "brbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
-		convert << prob_rmse << "_crbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		convert << prob_rmse << "_brbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
 		rbm_out_name_pre = out_dir + convert.str();
 		string rbm_out_name = rbm_out_name_pre;
 
@@ -494,10 +584,10 @@ public:
 	void write_prob_results_to_file(vector<float> results, const float prob_rmse, unsigned int iter_num) {
 
 		// store results
-		string out_dir = "crbm_results/";
+		string out_dir = "brbm_results/";
 		string rbm_out_name_pre;
 		ostringstream convert;
-		convert << "prob" << prob_rmse << "_crbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
+		convert << "prob" << prob_rmse << "_brbm" << "_lrate" << this->lrate << "_F" << this->F << "_C" << this->C << "_iter" << iter_num;
 		rbm_out_name_pre = out_dir + convert.str();
 		string rbm_out_name = rbm_out_name_pre;
 
@@ -515,12 +605,53 @@ public:
 		rbm_out_file.close();
 	}
 
+
+	void saveAllParameters(int iter_num) {
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "brbm_starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		string outName_D = out_dir + prefix.str() + "_D.mat";
+		
+		A.save(outName_A, arma_binary);
+		B.save(outName_B, arma_binary);
+		BV.save(outName_BV, arma_binary);
+		BH.save(outName_BH, arma_binary);
+		D.save(outName_D, arma_binary);
+
+	}
+
+	void loadAllParameters(int iter_num) {
+
+		ostringstream prefix;
+		prefix << "K" << K << "_F" << F << "_C" << C << "_M" << M << "_N" << N << "_iter" << iter_num;
+
+		string out_dir = "brbm_starting_parameters/";
+
+		string outName_A = out_dir + prefix.str() + "_A.cub";
+		string outName_B = out_dir + prefix.str() + "_B.mat";
+		string outName_BV = out_dir + prefix.str() + "_BV.mat";
+		string outName_BH = out_dir + prefix.str() + "_BH.vec";
+		string outName_D = out_dir + prefix.str() + "_D.mat";
+		
+		A.load(outName_A, arma_binary);
+		B.load(outName_B, arma_binary);
+		BV.load(outName_BV, arma_binary);
+		BH.load(outName_BH, arma_binary);
+		D.load(outName_D, arma_binary);
+	}
+
 };
 
 
 
-unordered_map<unsigned int, int*> make_pre_map(const record_array &record_data) {
-	unordered_map<unsigned int, int*> record_map;
+void make_pre_map_vec(const record_array &record_data, unordered_map<unsigned int, int*> &record_map, vector<unsigned int> &record_vec) {
+	// unordered_map<unsigned int, int*> record_map;
 
 	unsigned int cur_user = record_data.data[0].user;
 	int cur_start = 0;
@@ -536,27 +667,30 @@ unordered_map<unsigned int, int*> make_pre_map(const record_array &record_data) 
 			user_ids[0] = cur_start;
 			user_ids[1] = cur_end;
 			record_map[cur_user] = user_ids;
+			record_vec.push_back(cur_user);
 			
 			cur_user = this_data.user;
 			cur_start = i;
 		}
 	}
-	user_ids = new int[2];
-	user_ids[0] = cur_start;
-	user_ids[1] = record_data.size;
-	record_map[cur_user] = user_ids;
+	if (cur_user != record_vec.back()) {
+		user_ids = new int[2];
+		user_ids[0] = cur_start;
+		user_ids[1] = record_data.size;
+		record_map[cur_user] = user_ids;
+		record_vec.push_back(cur_user);
+	}
 
 	cout << "number of users = " << record_map.size() << endl;
 
-	return record_map;
 }
-
 
 
 
 
 int main () {
 
+	srand(time(NULL));
 
 	unsigned int ITER_NUM = 60;
 	
@@ -564,6 +698,12 @@ int main () {
 	// string train_file_name = "../../../data/mini_main.data";
 	// string test_file_name = "../../../data/mini_prob.data";
 	// string qual_file_name = "../../../data/mini_prob.data"; // TODO: Change this name!!!
+
+	// string train_file_name = "../../../data/mid_main.data";
+	// string test_file_name = "../../../data/mid_prob.data";
+	// string qual_file_name = "../../../data/mid_prob.data";
+
+
 	string train_file_name = "../../../data/main_data.data";
 	string test_file_name = "../../../data/prob_data.data";
 	string qual_file_name = "../../../data/qual_data.data";
@@ -584,20 +724,22 @@ int main () {
 	rbm.ptr_test_data = &test_data;
 	rbm.ptr_qual_data = &qual_data;
 
-	rbm.train_map = make_pre_map(train_data);
-	rbm.test_map = make_pre_map(test_data);
-	rbm.qual_map = make_pre_map(qual_data);
+	make_pre_map_vec(train_data, rbm.train_map, rbm.train_vec);
+	make_pre_map_vec(test_data, rbm.test_map, rbm.test_vec);
+	make_pre_map_vec(qual_data, rbm.qual_map, rbm.qual_vec);
+
+	fillRandomBUD(train_data, rbm.BUD);
 
 
 	rbm.fit(train_data, ITER_NUM);
 
 
 	// TODO Rewrite calling for predict array
-	vector<float> results = rbm.predict_array(test_data, qual_data, rbm.test_map, rbm.qual_map);
+	vector<float> results = rbm.predict_array(test_data, qual_data, rbm.test_map, rbm.qual_map, rbm.test_vec, rbm.qual_vec);
 	float prob_rmse = RMSE(test_data, results);
 	cout << "RMSE: " << prob_rmse << endl;
 
-	if (prob_rmse < 0.925) {
+	if (prob_rmse < 0.91) {
 		rbm.predict_qual_results_to_file(prob_rmse, ITER_NUM);
 	}
 
