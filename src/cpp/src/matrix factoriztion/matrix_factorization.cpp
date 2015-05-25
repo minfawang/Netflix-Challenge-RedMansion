@@ -40,7 +40,7 @@ int main(int argc, char * argv[]) {
     est.learning_rate_file = learning_rate_file;
     est.lambda_file = lambda_file;
 
-    est.lambda_factor = 1000;
+    est.lambda_factor = lambda_factor;
 
 	//constant_estimator est;
 

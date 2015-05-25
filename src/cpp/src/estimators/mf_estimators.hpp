@@ -181,7 +181,7 @@ public:
     double rmse_sum;
     double rmse_count;
 	gamma_mf() {
-		K = 20;
+		K = 50;
         scale = 1;
 		D_u = 20;
 		D_i = 20;
@@ -201,7 +201,7 @@ public:
 		// learning_rate = 0.002;
 		learning_rate = 0.0015;
 
-		learning_rate_mul = 0.9;
+		learning_rate_mul = 0.95;
 		learning_rate_min = 0;
 	}
 
