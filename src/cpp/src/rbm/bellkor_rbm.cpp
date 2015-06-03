@@ -130,9 +130,9 @@ public:
 
 
 		CD_K = 1;
-		lrate = 0.04 / BATCH_SIZE;
-		ulrate = 0.0025;
-		utlrate = 0.008;
+		lrate = 0.06 / BATCH_SIZE;
+		ulrate = 0.003;
+		utlrate = 0.01;
 
 		weight_decay = 0.001;
 
@@ -184,7 +184,7 @@ public:
 				vector<float> results = predict_array(*ptr_test_data, *ptr_qual_data, test_map, qual_map, test_vec, qual_vec);
 				float prob_rmse = RMSE(*ptr_test_data, results);
 				cout << "RMSE: " << prob_rmse << endl;
-				if (prob_rmse < 0.92) {
+				if (prob_rmse < 0.925) {
 					write_prob_results_to_file(results, prob_rmse, iter_num);
 					predict_qual_results_to_file(prob_rmse, iter_num);
 				}				
@@ -739,9 +739,7 @@ int main () {
 	float prob_rmse = RMSE(test_data, results);
 	cout << "RMSE: " << prob_rmse << endl;
 
-	if (prob_rmse < 0.91) {
-		rbm.predict_qual_results_to_file(prob_rmse, ITER_NUM);
-	}
+	rbm.predict_qual_results_to_file(prob_rmse, ITER_NUM);
 
 
 

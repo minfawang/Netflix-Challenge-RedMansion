@@ -9,7 +9,7 @@
 #ifndef __MAKE_MINI_DATA
 #define __MAKE_MINI_DATA
 
-#define DIV 10
+#define DIV 5
 #define PROB_IN_MINI 20
 
 
@@ -33,7 +33,7 @@ void split_mini (string prefix) {
 
 	int prob_size = recMini.size / PROB_IN_MINI;
 	int prob_idx[prob_size];
-	short* main_prob_idx = new short[recMini.size];
+	int* main_prob_idx = new int[recMini.size];
 	// int main_prob_idx[recMini.size];
 
 	for (int i = 0; i < prob_size; ++i) {
@@ -56,29 +56,40 @@ void split_mini (string prefix) {
 
 	set<int> main_user_set;
 
-	mini_main.open(main_name, ios::binary | ios::out);
+	// two more loop to ensure that all data in prob is already in main
 	for (int i = 0; i < recMini.size; i++) {
+		record r = recMini.data[i];
 		if (!main_prob_idx[i]) {
-			record r = recMini.data[i];
-			mini_main.write((char*)&r, sizeof(r));
-
 			if (main_user_set.find(r.user) == main_user_set.end()) 
 				main_user_set.insert(r.user);
 		}
 	}
-
-	mini_prob.open(prob_name, ios::binary | ios::out);
 	for (int i = 0; i < recMini.size; i++) {
+		record r = recMini.data[i];
 		if (main_prob_idx[i]) {
-			record r = recMini.data[i];
-			if (main_user_set.find(r.user) != main_user_set.end())
-				mini_prob.write((char*)&r, sizeof(r));
-			else {
-				mini_main.write((char*)&r, sizeof(r));
+			if (main_user_set.find(r.user) == main_user_set.end()) {
+
 				main_user_set.insert(r.user);
+				main_prob_idx[i] = 0;
 			}
 		}
 	}
+
+
+	mini_main.open(main_name, ios::binary | ios::out);
+	mini_prob.open(prob_name, ios::binary | ios::out);
+	
+	for (int i = 0; i < recMini.size; i++) {
+		
+		record r = recMini.data[i];
+		
+		if (!main_prob_idx[i]) {
+			mini_main.write((char*)&r, sizeof(r));
+		} else {
+			mini_prob.write((char*)&r, sizeof(r));
+		}
+	}
+
 	// for (int i = 0; i < recMini.size; i++) {
 	// 	record r = recMini.data[i];
 	// 	if (main_prob_idx[i])
@@ -129,7 +140,7 @@ void make_mini(string prefix) {
 
 
 int main () {
-	string prefix = "mini";
+	string prefix = "mid";
 	make_mini(prefix);
 	split_mini(prefix);
 
